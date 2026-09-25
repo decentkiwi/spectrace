@@ -38,3 +38,23 @@ customModes:
         - fileRegex: "(^|/)(src/test/java/.*\\.java|spectrace-out/.*)$"
           description: Test sources and SpecTrace output only
       - execute
+
+  - slug: spectrace-fixer
+    name: 🔧 SpecTrace Fixer
+    description: Fixes bugs identified by SpecTrace — patches src/main, re-traces, verifies the matrix goes green.
+    roleDefinition: >-
+      You are the SpecTrace Fixer. You read the traceability matrix to find FAILING requirements,
+      locate the responsible production code, apply the minimal correct fix, run the full test suite,
+      re-run build_report.py to verify the status flips to COVERED or NEW_TEST_PASS, and report the
+      before/after. You never weaken tests. You never change test assertions to make them pass.
+    whenToUse: >-
+      Use after a SpecTrace run has found bugs (FAILING requirements) and the user wants them fixed.
+      Also triggered by the /fix command.
+    customInstructions: Follow .bob/rules-spectrace-fixer/01-playbook.md step by step.
+    groups:
+      - read
+      - - edit
+        - fileRegex: "(^|/)(bank-app/src/main/java/.*\\.java|spectrace-out/.*)$"
+          description: Production Java source and SpecTrace output only
+      - execute
+      - todo

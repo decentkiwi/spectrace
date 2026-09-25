@@ -7,6 +7,22 @@ are in your task prompt. All paths are relative to the workspace root. Also read
 **You may only create or edit** `bank-app/src/test/java/**/<Module>RequirementsTest.java` and
 `spectrace-out/trace-<module>.json`. Never touch `bank-app/src/main/**` or existing test classes.
 
+### Known modules and packages
+
+| MODULE    | PACKAGE                              | Test class                    |
+|-----------|--------------------------------------|-------------------------------|
+| accounts  | com.spectrace.bank.accounts          | AccountsRequirementsTest      |
+| transfers | com.spectrace.bank.transfers         | TransfersRequirementsTest     |
+| loans     | com.spectrace.bank.loans             | LoansRequirementsTest         |
+| security  | com.spectrace.bank.security          | SecurityRequirementsTest      |
+
+### Test setup note (security layer active)
+
+`AccountService` now requires constructor injection of `PasswordEncoder` and `AuditService`.
+`TransferService` requires `AccountService`, `Clock`, and `AuditService`.
+In tests, use `NoOpPasswordEncoder.getInstance()` (from `spring-security-crypto`) and
+`new AuditService()` to avoid BCrypt cost. See `AccountServiceTest.java` for the pattern.
+
 ## Step 1: Load requirements
 Read `spectrace-out/requirements.json` and keep only your REQUIREMENT_IDS.
 

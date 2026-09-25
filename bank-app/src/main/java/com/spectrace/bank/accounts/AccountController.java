@@ -9,15 +9,25 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.PositiveOrZero;
+
 @RestController
 @RequestMapping("/api/accounts")
 public class AccountController {
 
-    record OpenRequest(String ownerName, BigDecimal initialDeposit, String pin) {
-    }
+    record OpenRequest(
+        @NotBlank(message = "Owner name is required") String ownerName,
+        @NotNull(message = "Initial deposit is required") @PositiveOrZero BigDecimal initialDeposit,
+        @NotBlank @Pattern(regexp = "\\d{6}", message = "PIN must be 6 digits") String pin
+    ) {}
 
-    record AmountRequest(BigDecimal amount) {
-    }
+    record AmountRequest(
+        @NotNull(message = "Amount is required") @jakarta.validation.constraints.Positive BigDecimal amount
+    ) {}
 
     private final AccountService accounts;
 
@@ -26,7 +36,7 @@ public class AccountController {
     }
 
     @PostMapping
-    public Account open(@RequestBody OpenRequest req) {
+    public Account open(@Valid @RequestBody OpenRequest req) {
         return accounts.open(req.ownerName(), req.initialDeposit(), req.pin());
     }
 
@@ -41,12 +51,12 @@ public class AccountController {
     }
 
     @PostMapping("/{number}/deposit")
-    public Account deposit(@PathVariable String number, @RequestBody AmountRequest req) {
+    public Account deposit(@PathVariable String number, @Valid @RequestBody AmountRequest req) {
         return accounts.deposit(number, req.amount());
     }
 
     @PostMapping("/{number}/withdraw")
-    public Account withdraw(@PathVariable String number, @RequestBody AmountRequest req) {
+    public Account withdraw(@PathVariable String number, @Valid @RequestBody AmountRequest req) {
         return accounts.withdraw(number, req.amount());
     }
 

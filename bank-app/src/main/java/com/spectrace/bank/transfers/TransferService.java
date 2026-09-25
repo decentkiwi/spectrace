@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import com.spectrace.bank.accounts.Account;
 import com.spectrace.bank.accounts.AccountService;
+import com.spectrace.bank.common.AuditService;
 import com.spectrace.bank.common.BankException;
 import com.spectrace.bank.common.Money;
 
@@ -24,11 +25,13 @@ public class TransferService {
 
     private final AccountService accounts;
     private final Clock clock;
+    private final AuditService audit;
     private final List<Transfer> ledger = new ArrayList<>();
 
-    public TransferService(AccountService accounts, Clock clock) {
+    public TransferService(AccountService accounts, Clock clock, AuditService audit) {
         this.accounts = accounts;
         this.clock = clock;
+        this.audit = audit;
     }
 
     public synchronized Transfer transfer(String from, String to, BigDecimal amount) {
@@ -45,12 +48,15 @@ public class TransferService {
 
         BigDecimal sentToday = totalSentOn(from, LocalDate.now(clock));
         if (sentToday.add(amount).compareTo(DAILY_LIMIT) >= 0) {
+            audit.record(from, "TRANSFER_BLOCKED", "Daily limit exceeded: attempted " + amount);
             throw new DailyLimitExceededException(from);
         }
 
         LocalDateTime now = LocalDateTime.now(clock);
         if (isNewPayee(from, to) && amount.compareTo(NEW_PAYEE_REVIEW_THRESHOLD) > 0) {
-            return record(new Transfer(nextReference(), from, to, amount, now, Transfer.Status.PENDING_REVIEW));
+            Transfer t = record(new Transfer(nextReference(), from, to, amount, now, Transfer.Status.PENDING_REVIEW));
+            audit.record(from, "TRANSFER_PENDING_REVIEW", "To: " + to + " amount: " + amount);
+            return t;
         }
 
         accounts.withdraw(from, amount);
@@ -60,7 +66,9 @@ public class TransferService {
             accounts.deposit(from, amount);
             throw e;
         }
-        return record(new Transfer(nextReference(), from, to, amount, now, Transfer.Status.COMPLETED));
+        Transfer t = record(new Transfer(nextReference(), from, to, amount, now, Transfer.Status.COMPLETED));
+        audit.record(from, "TRANSFER_COMPLETED", "To: " + to + " amount: " + amount + " ref: " + t.reference());
+        return t;
     }
 
     public synchronized List<Transfer> history(String accountNumber) {

@@ -10,9 +10,11 @@ import java.time.ZoneId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.crypto.password.NoOpPasswordEncoder;
 
 import com.spectrace.bank.accounts.Account;
 import com.spectrace.bank.accounts.AccountService;
+import com.spectrace.bank.common.AuditService;
 import com.spectrace.bank.common.Money;
 
 class TransferServiceTest {
@@ -26,8 +28,9 @@ class TransferServiceTest {
 
     @BeforeEach
     void setUp() {
-        accounts = new AccountService();
-        service = new TransferService(accounts, FIXED);
+        AuditService audit = new AuditService();
+        accounts = new AccountService(NoOpPasswordEncoder.getInstance(), audit);
+        service = new TransferService(accounts, FIXED, audit);
         alice = accounts.open("Alice", Money.sgd("10000"), "111111");
         bob = accounts.open("Bob", Money.sgd("500"), "222222");
     }

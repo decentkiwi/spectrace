@@ -5,8 +5,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.spectrace.bank.common.AuditService;
 import com.spectrace.bank.common.BankException;
 import com.spectrace.bank.common.Money;
 
@@ -14,6 +16,13 @@ import com.spectrace.bank.common.Money;
 public class AccountService {
 
     private final Map<String, Account> accounts = new ConcurrentHashMap<>();
+    private final PasswordEncoder passwordEncoder;
+    private final AuditService audit;
+
+    public AccountService(PasswordEncoder passwordEncoder, AuditService audit) {
+        this.passwordEncoder = passwordEncoder;
+        this.audit = audit;
+    }
 
     public Account open(String ownerName, BigDecimal initialDeposit, String pin) {
         if (ownerName == null || ownerName.isBlank()) {
@@ -26,8 +35,10 @@ public class AccountService {
             throw new IllegalArgumentException("PIN must be 6 digits");
         }
         String number = nextAccountNumber();
-        Account account = new Account(number, ownerName.trim(), pin, Money.round(initialDeposit));
+        String pinHash = passwordEncoder.encode(pin);
+        Account account = new Account(number, ownerName.trim(), pinHash, Money.round(initialDeposit));
         accounts.put(number, account);
+        audit.record(number, "ACCOUNT_OPENED", "Owner: " + ownerName.trim());
         return account;
     }
 
@@ -45,6 +56,7 @@ public class AccountService {
             throw new IllegalArgumentException("Deposit amount must be positive");
         }
         account.setBalance(Money.round(account.getBalance().add(amount)));
+        audit.record(accountNumber, "DEPOSIT", "Amount: " + amount);
         return account;
     }
 
@@ -54,9 +66,11 @@ public class AccountService {
             throw new IllegalArgumentException("Withdrawal amount must be positive");
         }
         if (account.getBalance().compareTo(amount) < 0) {
+            audit.record(accountNumber, "WITHDRAWAL_FAILED", "Insufficient funds for: " + amount);
             throw new InsufficientFundsException(accountNumber);
         }
         account.setBalance(Money.round(account.getBalance().subtract(amount)));
+        audit.record(accountNumber, "WITHDRAWAL", "Amount: " + amount);
         return account;
     }
 
@@ -70,12 +84,14 @@ public class AccountService {
             throw new BankException("Account must have zero balance before closing");
         }
         account.setStatus(Account.Status.CLOSED);
+        audit.record(accountNumber, "ACCOUNT_CLOSED", "");
         return account;
     }
 
     public Account freeze(String accountNumber) {
         Account account = get(accountNumber);
         account.setStatus(Account.Status.FROZEN);
+        audit.record(accountNumber, "ACCOUNT_FROZEN", "");
         return account;
     }
 

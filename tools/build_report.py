@@ -114,6 +114,8 @@ def build(out, app, baseline_ref, build_dir):
     if not reqs:
         sys.exit(f"missing {out}/requirements.json. Run the extractor first")
     req_list = reqs["requirements"] if isinstance(reqs, dict) else reqs
+    doc_id = reqs.get("document", "requirements") if isinstance(reqs, dict) else "requirements"
+    doc_version = reqs.get("version", "") if isinstance(reqs, dict) else ""
 
     claims = {}
     for path in sorted(glob.glob(os.path.join(out, "trace-*.json"))):
@@ -123,6 +125,14 @@ def build(out, app, baseline_ref, build_dir):
     tagged = scan_test_tree(app)
     baseline = scan_baseline(app, baseline_ref)
     surefire = load_surefire(app, build_dir)
+
+    # Load previous run's statuses for diff view
+    prev_statuses = {}
+    prev_reqs = load_json(os.path.join(out, "requirements.prev.json"))
+    prev_matrix = load_json(os.path.join(out, "matrix-prev.json"))
+    if prev_matrix:
+        for entry in prev_matrix.get("rows", []):
+            prev_statuses[entry["id"]] = entry["status"]
 
     rows = []
     for req in req_list:
@@ -157,11 +167,14 @@ def build(out, app, baseline_ref, build_dir):
             status = "COVERED"
 
         claimed = claim.get("status")
+        prev_status = prev_statuses.get(rid)
         rows.append({
             "id": rid,
             "title": req.get("title", ""),
             "module": req.get("module", rid.split("-")[1].lower()),
             "status": status,
+            "prev_status": prev_status,
+            "status_changed": prev_status is not None and prev_status != status,
             "agent_status": claimed,
             "agent_agrees": claimed in (None, status),
             "implementation": claim.get("implementation", []),
@@ -177,8 +190,12 @@ def build(out, app, baseline_ref, build_dir):
         t0 = datetime.fromisoformat(started.replace("Z", "+00:00"))
         elapsed_min = round((datetime.now(timezone.utc) - t0).total_seconds() / 60, 1)
     manual_min_per_req = run.get("manual_minutes_per_requirement", 30)
+    manual_total_min = manual_min_per_req * len(rows)
+    saved_min = (manual_total_min - elapsed_min) if elapsed_min is not None else None
     metrics = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "document": doc_id,
+        "document_version": doc_version,
         "requirements_total": len(rows),
         "status_counts": counts,
         "tests_total": sum(len(r["tests"]) for r in rows),
@@ -187,37 +204,65 @@ def build(out, app, baseline_ref, build_dir):
         "gaps_found": counts["NOT_IMPLEMENTED"] + counts["UNTESTED"],
         "agent_disagreements": [r["id"] for r in rows if not r["agent_agrees"]],
         "spectrace_minutes": elapsed_min,
-        "manual_estimate_minutes": manual_min_per_req * len(rows),
+        "manual_estimate_minutes": manual_total_min,
+        "time_saved_minutes": saved_min,
         "manual_estimate_basis": f"{manual_min_per_req} min per requirement to locate code, find tests, "
                                  f"write missing tests and update the matrix by hand",
+        "status_changes": [{"id": r["id"], "from": r["prev_status"], "to": r["status"]}
+                           for r in rows if r["status_changed"]],
     }
-    return rows, metrics
+    return rows, metrics, doc_id
 
 
 def render_md(rows, metrics):
     c = metrics["status_counts"]
+    doc = metrics.get("document", "requirements")
     lines = ["# SpecTrace traceability matrix", "",
-             f"_Generated {metrics['generated_at']}_", "",
+             f"_Generated {metrics['generated_at']} · {doc}_", "",
              f"**{metrics['requirements_total']} requirements**: "
              f"{c['COVERED']} covered · {c['NEW_TEST_PASS']} newly tested · "
              f"{c['FAILING']} bugs found · {c['NOT_IMPLEMENTED']} not implemented · "
-             f"{c['UNTESTED']} untested · {metrics['tests_added']} tests added", "",
-             "| Requirement | Status | Implementation | Tests | Notes |",
-             "|---|---|---|---|---|"]
+             f"{c['UNTESTED']} untested · {metrics['tests_added']} tests added", ""]
+    if metrics.get("time_saved_minutes") is not None:
+        saved = metrics["time_saved_minutes"]
+        h, m = divmod(int(saved), 60)
+        lines += [f"> ⏱ SpecTrace: **{metrics['spectrace_minutes']} min** · "
+                  f"Manual estimate: **~{metrics['manual_estimate_minutes'] // 60} h {metrics['manual_estimate_minutes'] % 60} min** · "
+                  f"**Time saved: ~{h} h {m} min**", ""]
+    if metrics.get("status_changes"):
+        lines += ["## Changes since last run", ""]
+        for ch in metrics["status_changes"]:
+            lines.append(f"- **{ch['id']}**: {ch['from']} → {ch['to']}")
+        lines.append("")
+    lines += ["| Requirement | Status | Implementation | Tests | Notes |",
+              "|---|---|---|---|---|"]
     for r in sorted(rows, key=lambda r: r["id"]):
         impl = "<br>".join(f"`{i.get('symbol') or i.get('file')}`" for i in r["implementation"]) or "-"
         tests = "<br>".join(f"{'🆕 ' if t['new'] else ''}{t['method']} ({t['result']})" for t in r["tests"]) or "-"
         flag = "" if r["agent_agrees"] else f" ⚠ agent said {r['agent_status']}"
-        lines.append(f"| **{r['id']}** {r['title']} | {STATUSES[r['status']][0]}{flag} | {impl} | {tests} | "
+        diff_arrow = f" ↑ was {r['prev_status']}" if r["status_changed"] else ""
+        lines.append(f"| **{r['id']}** {r['title']} | {STATUSES[r['status']][0]}{diff_arrow}{flag} | {impl} | {tests} | "
                      f"{r['notes'].replace('|', '/')} |")
     lines += ["", f"Time: SpecTrace {metrics['spectrace_minutes']} min vs manual estimate "
               f"{metrics['manual_estimate_minutes']} min ({metrics['manual_estimate_basis']})."]
     return "\n".join(lines) + "\n"
 
 
-def render_html(rows, metrics):
+def _fmt_saved(saved_min):
+    """Return a human-readable 'X h Y min saved' string."""
+    if saved_min is None:
+        return None
+    h, m = divmod(int(max(0, saved_min)), 60)
+    if h > 0:
+        return f"~{h} h {m} min saved"
+    return f"~{m} min saved"
+
+
+def render_html(rows, metrics, doc_id):
     esc = html.escape
     c = metrics["status_counts"]
+    saved_str = _fmt_saved(metrics.get("time_saved_minutes"))
+
     cards = [("Requirements", metrics["requirements_total"], "neutral"),
              ("Covered", c["COVERED"], "covered"),
              ("Newly tested", c["NEW_TEST_PASS"], "new"),
@@ -240,22 +285,53 @@ def render_html(rows, metrics):
             f"{'<div class=msg>' + esc(t['message']) + '</div>' if t['message'] else ''}</div>"
             for t in r["tests"]) or "<span class='muted'>no tests</span>"
         flag = "" if r["agent_agrees"] else f"<div class='warn'>agent claimed {esc(str(r['agent_status']))}</div>"
-        body.append(f"<tr><td><div class='rid'>{esc(r['id'])}</div><div>{esc(r['title'])}</div></td>"
-                    f"<td><span class='pill {klass[r['status']]}'>{STATUSES[r['status']][0]}</span>{flag}</td>"
+        diff_badge = ""
+        if r["status_changed"]:
+            prev_lbl = STATUSES.get(r["prev_status"], (r["prev_status"],))[0]
+            diff_badge = f"<div class='diff-badge'>was: {esc(prev_lbl)}</div>"
+        row_class = " class='changed-row'" if r["status_changed"] else ""
+        body.append(f"<tr{row_class}><td><div class='rid'>{esc(r['id'])}</div><div>{esc(r['title'])}</div></td>"
+                    f"<td><span class='pill {klass[r['status']]}'>{STATUSES[r['status']][0]}</span>{diff_badge}{flag}</td>"
                     f"<td>{impl}</td><td>{tests}</td><td class='notes'>{esc(r['notes'])}</td></tr>")
-    speed = ""
+
+    # Time-saved banner
+    speed_html = ""
     if metrics["spectrace_minutes"] is not None:
-        speed = (f"<p class='speed'><b>{metrics['spectrace_minutes']} min</b> with SpecTrace vs "
-                 f"<b>~{metrics['manual_estimate_minutes'] // 60} h {metrics['manual_estimate_minutes'] % 60} min</b> "
-                 f"manual estimate <span class='muted'>({esc(metrics['manual_estimate_basis'])})</span></p>")
+        manual_h = metrics["manual_estimate_minutes"] // 60
+        manual_m = metrics["manual_estimate_minutes"] % 60
+        st_min = metrics["spectrace_minutes"]
+        saved_display = saved_str or ""
+        speed_html = f"""<div class="speed-banner">
+  <div class="speed-item"><span class="speed-lbl">SpecTrace</span><span class="speed-val">{st_min} min</span></div>
+  <div class="speed-sep">vs</div>
+  <div class="speed-item"><span class="speed-lbl">Manual estimate</span><span class="speed-val">~{manual_h} h {manual_m} min</span></div>
+  {"" if not saved_display else f'<div class="speed-saved">{esc(saved_display)}</div>'}
+</div>
+<p class='speed-basis muted'>{esc(metrics["manual_estimate_basis"])}</p>"""
+
+    # Changed-rows summary
+    changes_html = ""
+    if metrics.get("status_changes"):
+        ch_items = "".join(
+            f"<li><b>{esc(ch['id'])}</b>: "
+            f"<span class='pill {klass.get(ch['from'], 'neutral')} small'>{esc(STATUSES.get(ch['from'], (ch['from'],))[0])}</span>"
+            f" → <span class='pill {klass.get(ch['to'], 'neutral')} small'>{esc(STATUSES.get(ch['to'], (ch['to'],))[0])}</span></li>"
+            for ch in metrics["status_changes"])
+        changes_html = f"<div class='changes-box'><b>Changes since last run:</b><ul>{ch_items}</ul></div>"
+
+    doc_version = metrics.get("document_version", "")
+    subtitle = f"{esc(doc_id)}{' v' + esc(doc_version) if doc_version else ''} → bank-app · generated {esc(metrics['generated_at'])} · statuses verified against Surefire results"
+
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SpecTrace Matrix</title>
+<title>SpecTrace · {esc(doc_id)}</title>
 <style>
 :root {{ --bg:#fff; --fg:#161616; --muted:#6f6f6f; --line:#e0e0e0; --panel:#f4f4f4;
-  --covered:#198038; --new:#0f62fe; --failing:#da1e28; --missing:#8a3ffc; }}
+  --covered:#198038; --new:#0f62fe; --failing:#da1e28; --missing:#8a3ffc;
+  --changed-bg:#fffbdd; --changed-border:#f0c000; }}
 @media (prefers-color-scheme: dark) {{ :root {{ --bg:#161616; --fg:#f4f4f4; --muted:#a8a8a8; --line:#393939;
-  --panel:#262626; --covered:#42be65; --new:#78a9ff; --failing:#ff8389; --missing:#be95ff; }} }}
+  --panel:#262626; --covered:#42be65; --new:#78a9ff; --failing:#ff8389; --missing:#be95ff;
+  --changed-bg:#2d2a00; --changed-border:#c09000; }} }}
 * {{ box-sizing:border-box }}
 body {{ margin:0; padding:24px 16px; background:var(--bg); color:var(--fg);
   font:14px/1.45 "IBM Plex Sans","Helvetica Neue",Arial,sans-serif }}
@@ -266,7 +342,19 @@ h1 {{ margin:0 0 4px; font-size:24px }} .muted {{ color:var(--muted) }}
 .card .num {{ font-size:28px; font-weight:600 }} .card .lbl {{ color:var(--muted) }}
 .card.covered {{ border-color:var(--covered) }} .card.new {{ border-color:var(--new) }}
 .card.failing {{ border-color:var(--failing) }} .card.missing {{ border-color:var(--missing) }}
-.speed {{ font-size:15px }}
+.speed-banner {{ display:flex; align-items:center; gap:20px; background:var(--panel);
+  border-left:4px solid var(--new); padding:14px 18px; margin:16px 0 4px; border-radius:0 4px 4px 0 }}
+.speed-item {{ display:flex; flex-direction:column }}
+.speed-lbl {{ font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted) }}
+.speed-val {{ font-size:22px; font-weight:700 }}
+.speed-sep {{ font-size:18px; color:var(--muted) }}
+.speed-saved {{ margin-left:auto; font-size:20px; font-weight:700; color:var(--covered);
+  background:color-mix(in srgb,var(--covered) 12%,transparent); padding:6px 14px; border-radius:20px }}
+.speed-basis {{ font-size:12px; margin:0 0 16px }}
+.changes-box {{ background:var(--changed-bg); border-left:4px solid var(--changed-border);
+  padding:10px 16px; margin:12px 0; border-radius:0 4px 4px 0 }}
+.changes-box ul {{ margin:4px 0 0; padding-left:18px }}
+.changes-box li {{ margin:2px 0 }}
 .wrap {{ overflow-x:auto }}
 table {{ width:100%; border-collapse:collapse; min-width:1000px }}
 th,td {{ border-bottom:1px solid var(--line); padding:10px 8px; vertical-align:top; text-align:left }}
@@ -274,8 +362,14 @@ th {{ font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(
 .rid {{ font-family:"IBM Plex Mono",Menlo,monospace; font-weight:600 }}
 code {{ font-family:"IBM Plex Mono",Menlo,monospace; font-size:12px }}
 .pill {{ display:inline-block; padding:2px 10px; border-radius:12px; font-size:12px; font-weight:600; color:#fff; white-space:nowrap }}
+.pill.small {{ padding:1px 7px; font-size:11px }}
 .pill.covered {{ background:var(--covered) }} .pill.new {{ background:var(--new) }}
 .pill.failing {{ background:var(--failing) }} .pill.missing {{ background:var(--missing) }}
+.pill.neutral {{ background:var(--muted) }}
+.diff-badge {{ display:inline-block; font-size:11px; color:var(--changed-border);
+  background:var(--changed-bg); border:1px solid var(--changed-border);
+  padding:1px 6px; border-radius:8px; margin-top:3px }}
+tr.changed-row > td:first-child {{ border-left:3px solid var(--changed-border) }}
 .t {{ margin-bottom:4px }} .t .res {{ font-size:11px; font-weight:600 }}
 .t.pass .res {{ color:var(--covered) }} .t.fail .res {{ color:var(--failing) }} .t.missing .res {{ color:var(--missing) }}
 .msg {{ font-size:12px; color:var(--failing) }}
@@ -284,9 +378,10 @@ code {{ font-family:"IBM Plex Mono",Menlo,monospace; font-size:12px }}
 .notes {{ font-size:13px; min-width:260px; max-width:360px }}
 </style></head><body><main>
 <h1>SpecTrace traceability matrix</h1>
-<div class="muted">NBK-BRD-2026-014 → bank-app · generated {esc(metrics['generated_at'])} · statuses checked against Surefire results</div>
+<div class="muted">{subtitle}</div>
 <div class="cards">{card_html}</div>
-{speed}
+{speed_html}
+{changes_html}
 <div class="wrap"><table><thead><tr><th>Requirement</th><th>Status</th><th>Implementation</th><th>Tests</th><th>Notes</th></tr></thead>
 <tbody>{''.join(body)}</tbody></table></div>
 </main></body></html>
@@ -301,19 +396,39 @@ def main():
     ap.add_argument("--baseline-ref", default="HEAD")
     args = ap.parse_args()
 
-    rows, metrics = build(args.out, args.app, args.baseline_ref, args.build_dir)
+    rows, metrics, doc_id = build(args.out, args.app, args.baseline_ref, args.build_dir)
+
+    # Snapshot current rows for next diff run before overwriting
+    matrix_prev_path = os.path.join(args.out, "matrix-prev.json")
+    matrix_curr_path = os.path.join(args.out, "matrix-curr.json")
+    if os.path.exists(matrix_curr_path):
+        import shutil
+        shutil.copy(matrix_curr_path, matrix_prev_path)
+    with open(matrix_curr_path, "w", encoding="utf-8") as f:
+        json.dump({"rows": [{"id": r["id"], "status": r["status"]} for r in rows]}, f)
+
     with open(os.path.join(args.out, "matrix.md"), "w", encoding="utf-8") as f:
         f.write(render_md(rows, metrics))
     with open(os.path.join(args.out, "matrix.html"), "w", encoding="utf-8") as f:
-        f.write(render_html(rows, metrics))
+        f.write(render_html(rows, metrics, doc_id))
     with open(os.path.join(args.out, "metrics.json"), "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2)
+
     c = metrics["status_counts"]
     print(f"{metrics['requirements_total']} requirements: {c['COVERED']} covered, {c['NEW_TEST_PASS']} newly tested, "
           f"{c['FAILING']} failing, {c['NOT_IMPLEMENTED']} not implemented, {c['UNTESTED']} untested, "
           f"{c['UNVERIFIED']} unverified; {metrics['tests_added']} tests added")
+    if metrics.get("time_saved_minutes") is not None:
+        saved = metrics["time_saved_minutes"]
+        h, m = divmod(int(max(0, saved)), 60)
+        print(f"Time: SpecTrace {metrics['spectrace_minutes']} min · manual estimate "
+              f"~{metrics['manual_estimate_minutes'] // 60} h {metrics['manual_estimate_minutes'] % 60} min · "
+              f"saved ~{h} h {m} min")
     if metrics["agent_disagreements"]:
         print("agent disagreements:", ", ".join(metrics["agent_disagreements"]))
+    if metrics.get("status_changes"):
+        print("status changes since last run:",
+              ", ".join(f"{ch['id']} {ch['from']}→{ch['to']}" for ch in metrics["status_changes"]))
 
 
 if __name__ == "__main__":

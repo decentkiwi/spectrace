@@ -8,7 +8,9 @@ import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.crypto.password.NoOpPasswordEncoder;
 
+import com.spectrace.bank.common.AuditService;
 import com.spectrace.bank.common.Money;
 
 class AccountServiceTest {
@@ -17,7 +19,7 @@ class AccountServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AccountService();
+        service = new AccountService(NoOpPasswordEncoder.getInstance(), new AuditService());
     }
 
     @Test
