@@ -1,0 +1,230 @@
+{
+  "document": "NBK-BRD-2026-014",
+  "version": "1.0",
+  "requirements": [
+    {
+      "id": "REQ-ACC-01",
+      "module": "accounts",
+      "title": "Account opening",
+      "text": "A customer can open an account by giving their full name, an initial deposit and a 6-digit PIN.",
+      "acceptance_criteria": [
+        "A blank or whitespace-only name is rejected.",
+        "A negative initial deposit is rejected. An initial deposit of SGD 0.00 is allowed.",
+        "A newly opened account has status ACTIVE and a balance equal to the initial deposit."
+      ]
+    },
+    {
+      "id": "REQ-ACC-02",
+      "module": "accounts",
+      "title": "Account number format",
+      "text": "Each account gets an account number made of the prefix \"SG\" and 8 digits, e.g. SG01234567.",
+      "acceptance_criteria": [
+        "Account numbers match the pattern SG\\d{8}.",
+        "No two accounts share an account number."
+      ]
+    },
+    {
+      "id": "REQ-ACC-03",
+      "module": "accounts",
+      "title": "Deposits",
+      "text": "A customer can deposit money into an active account.",
+      "acceptance_criteria": [
+        "The deposit amount must be greater than zero; zero or negative amounts are rejected.",
+        "The balance increases by exactly the deposited amount."
+      ]
+    },
+    {
+      "id": "REQ-ACC-04",
+      "module": "accounts",
+      "title": "Withdrawals and insufficient funds",
+      "text": "A customer can withdraw money from an active account, but never more than the available balance. Overdrafts are not offered.",
+      "acceptance_criteria": [
+        "A withdrawal larger than the balance is rejected with an insufficient-funds error.",
+        "After a rejected withdrawal, the balance is unchanged."
+      ]
+    },
+    {
+      "id": "REQ-ACC-05",
+      "module": "accounts",
+      "title": "Account closure",
+      "text": "An account can be closed only when its balance is exactly SGD 0.00.",
+      "acceptance_criteria": [
+        "Closing an account with a non-zero balance is rejected, and the account stays ACTIVE.",
+        "Closing an account with a zero balance sets its status to CLOSED."
+      ]
+    },
+    {
+      "id": "REQ-ACC-06",
+      "module": "accounts",
+      "title": "Frozen accounts",
+      "text": "An account in status FROZEN cannot receive deposits or make withdrawals.",
+      "acceptance_criteria": [
+        "A deposit to a frozen account is rejected.",
+        "A withdrawal from a frozen account is rejected.",
+        "The balance of a frozen account is not changed by rejected operations."
+      ]
+    },
+    {
+      "id": "REQ-ACC-07",
+      "module": "accounts",
+      "title": "PIN lockout",
+      "text": "To prevent brute-force attacks, an account is automatically frozen after 3 consecutive failed PIN verification attempts.",
+      "acceptance_criteria": [
+        "After the third consecutive incorrect PIN, the account status becomes FROZEN.",
+        "A successful verification resets the failed-attempt counter to zero.",
+        "Two failures, then a success, then two more failures leaves the account ACTIVE."
+      ]
+    },
+    {
+      "id": "REQ-ACC-08",
+      "module": "accounts",
+      "title": "Balance enquiry",
+      "text": "A balance enquiry returns the account balance rounded to two decimal places (half-up).",
+      "acceptance_criteria": [
+        "An account holding 10.005 reports a balance of 10.01."
+      ]
+    },
+    {
+      "id": "REQ-TRF-01",
+      "module": "transfers",
+      "title": "Atomic funds transfer",
+      "text": "A transfer debits the source account and credits the destination account as one atomic operation.",
+      "acceptance_criteria": [
+        "After a completed transfer of X, the source balance is lower by X and the destination balance is higher by X.",
+        "If the credit cannot be applied (e.g. destination not active), the source balance is unchanged."
+      ]
+    },
+    {
+      "id": "REQ-TRF-02",
+      "module": "transfers",
+      "title": "No self-transfers",
+      "text": "A transfer where source and destination are the same account is rejected.",
+      "acceptance_criteria": [
+        "Transferring from an account to itself raises a validation error."
+      ]
+    },
+    {
+      "id": "REQ-TRF-03",
+      "module": "transfers",
+      "title": "Daily transfer limit",
+      "text": "The total of outgoing transfers from one account in a calendar day must not exceed SGD 5,000.00. The limit is inclusive: a day's total of exactly SGD 5,000.00 is allowed.",
+      "acceptance_criteria": [
+        "Given SGD 4,000.00 already transferred today (to an existing payee), a further transfer of SGD 1,000.00 is accepted.",
+        "After that, a transfer of SGD 0.01 is rejected with a daily-limit error.",
+        "Transfers made on a previous calendar day do not count towards today's limit."
+      ]
+    },
+    {
+      "id": "REQ-TRF-04",
+      "module": "transfers",
+      "title": "New payee review",
+      "text": "A transfer of more than SGD 1,000.00 to a new payee is held for manual fraud review and not executed immediately.",
+      "acceptance_criteria": [
+        "A first-time transfer of SGD 1,000.01 or more to a payee has status PENDING_REVIEW, and neither balance changes.",
+        "A first-time transfer of exactly SGD 1,000.00 completes immediately.",
+        "Once one transfer to a payee has completed, later transfers to that payee are not held."
+      ]
+    },
+    {
+      "id": "REQ-TRF-05",
+      "module": "transfers",
+      "title": "Transfer reference",
+      "text": "Every transfer gets a unique reference of the form \"TRF-\" followed by 8 upper-case alphanumeric characters, plus a timestamp.",
+      "acceptance_criteria": [
+        "References match TRF-[A-Z0-9]{8} and are unique.",
+        "Each transfer records the time it was created."
+      ]
+    },
+    {
+      "id": "REQ-TRF-06",
+      "module": "transfers",
+      "title": "Transfer history",
+      "text": "A customer can view the transfer history of an account, including both incoming and outgoing transfers, most recent first.",
+      "acceptance_criteria": [
+        "History includes transfers where the account is the source or the destination.",
+        "Transfers are listed newest first.",
+        "Transfers between two other accounts do not appear."
+      ]
+    },
+    {
+      "id": "REQ-TRF-07",
+      "module": "transfers",
+      "title": "Scheduled transfers",
+      "text": "A customer can schedule a transfer for a future date. The transfer runs automatically on that date and can be cancelled before then.",
+      "acceptance_criteria": [
+        "A scheduled transfer does not move funds before its execution date.",
+        "On the execution date, the transfer is executed under the same rules as REQ-TRF-01 to REQ-TRF-04.",
+        "A cancelled scheduled transfer is never executed."
+      ]
+    },
+    {
+      "id": "REQ-LN-01",
+      "module": "loans",
+      "title": "Loan amount bounds",
+      "text": "Personal loans can be requested for SGD 1,000.00 to SGD 100,000.00 inclusive.",
+      "acceptance_criteria": [
+        "999.99 and 100,000.01 are rejected; 1,000.00 and 100,000.00 are eligible."
+      ]
+    },
+    {
+      "id": "REQ-LN-02",
+      "module": "loans",
+      "title": "Loan tenure",
+      "text": "The loan tenure is 12 to 60 months inclusive.",
+      "acceptance_criteria": [
+        "11 and 61 months are rejected; 12 and 60 months are eligible."
+      ]
+    },
+    {
+      "id": "REQ-LN-03",
+      "module": "loans",
+      "title": "Monthly instalment calculation",
+      "text": "The monthly instalment uses the standard amortisation formula M = P*r*(1+r)^n / ((1+r)^n - 1), where r is the annual rate / 12 and n is the tenure in months. The result is rounded to the nearest cent (half-up).",
+      "acceptance_criteria": [
+        "SGD 25,000.00 at 5.5% p.a. over 36 months -> instalment SGD 754.90.",
+        "SGD 60,000.00 at 4.5% p.a. over 48 months -> instalment SGD 1,368.21."
+      ]
+    },
+    {
+      "id": "REQ-LN-04",
+      "module": "loans",
+      "title": "Affordability check",
+      "text": "An application is rejected when the applicant's monthly income is less than 3 times the monthly instalment.",
+      "acceptance_criteria": [
+        "Income below 3x the instalment -> REJECTED with an affordability reason.",
+        "Income of 3x the instalment or more -> eligible."
+      ]
+    },
+    {
+      "id": "REQ-LN-05",
+      "module": "loans",
+      "title": "Interest rate tiers",
+      "text": "Interest rate depends on the loan amount tier.",
+      "acceptance_criteria": [
+        "Below SGD 20,000.00 -> 6.5%.",
+        "SGD 20,000.00 to SGD 50,000.00 inclusive -> 5.5%.",
+        "Above SGD 50,000.00 -> 4.5%."
+      ]
+    },
+    {
+      "id": "REQ-LN-06",
+      "module": "loans",
+      "title": "Early repayment fee",
+      "text": "A borrower who repays early pays a fee of 1.5% of the outstanding principal, rounded to the nearest cent (half-up).",
+      "acceptance_criteria": [
+        "Outstanding principal SGD 12,345.67 -> fee SGD 185.19.",
+        "Outstanding principal SGD 10,000.00 -> fee SGD 150.00."
+      ]
+    },
+    {
+      "id": "REQ-LN-07",
+      "module": "loans",
+      "title": "Loan decision",
+      "text": "Every loan application gets a decision of APPROVED or REJECTED. Rejected applications carry a human-readable reason.",
+      "acceptance_criteria": [
+        "Approved loans have no rejection reason; rejected loans always have one.",
+        "A decided application can be retrieved by its identifier."
+      ]
+    }
+  ]
+}

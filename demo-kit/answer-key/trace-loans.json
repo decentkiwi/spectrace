@@ -1,0 +1,148 @@
+{
+  "module": "loans",
+  "requirements": [
+    {
+      "id": "REQ-LN-01",
+      "status": "COVERED",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/loans/LoanService.java",
+          "symbol": "LoanService#evaluate",
+          "line": 72
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.loans.LoanServiceTest",
+          "method": "loanAmountMustBeWithinBounds",
+          "new": false
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "REQ-LN-02",
+      "status": "COVERED",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/loans/LoanService.java",
+          "symbol": "LoanService#evaluate",
+          "line": 77
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.loans.LoanServiceTest",
+          "method": "tenureMustBeBetween12And60Months",
+          "new": false
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "REQ-LN-03",
+      "status": "FAILING",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/loans/LoanService.java",
+          "symbol": "LoanService#monthlyInstalment",
+          "line": 60
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.loans.LoansRequirementsTest",
+          "method": "instalmentFor25000At5_5PercentOver36MonthsIs754_90",
+          "new": true
+        },
+        {
+          "class": "com.spectrace.bank.loans.LoansRequirementsTest",
+          "method": "instalmentFor60000At4_5PercentOver48MonthsIs1368_21",
+          "new": true
+        }
+      ],
+      "notes": "BUG: spec requires half-up rounding to the cent, but the code truncates with RoundingMode.DOWN (LoanService.java:60): 754.8975 becomes 754.89 instead of 754.90. Every customer is under-quoted by up to 1 cent/month."
+    },
+    {
+      "id": "REQ-LN-04",
+      "status": "NEW_TEST_PASS",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/loans/LoanService.java",
+          "symbol": "LoanService#evaluate",
+          "line": 82
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.loans.LoansRequirementsTest",
+          "method": "applicationIsRejectedWhenIncomeBelowThreeTimesInstalment",
+          "new": true
+        },
+        {
+          "class": "com.spectrace.bank.loans.LoansRequirementsTest",
+          "method": "applicationIsApprovedWhenIncomeAtLeastThreeTimesInstalment",
+          "new": true
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "REQ-LN-05",
+      "status": "COVERED",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/loans/LoanService.java",
+          "symbol": "LoanService#interestRateFor",
+          "line": 46
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.loans.LoanServiceTest",
+          "method": "interestRateDependsOnAmountTier",
+          "new": false
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "REQ-LN-06",
+      "status": "NEW_TEST_PASS",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/loans/LoanService.java",
+          "symbol": "LoanService#earlyRepaymentFee",
+          "line": 63
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.loans.LoansRequirementsTest",
+          "method": "earlyRepaymentFeeIsOnePointFivePercentRoundedHalfUp",
+          "new": true
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "REQ-LN-07",
+      "status": "COVERED",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/loans/LoanService.java",
+          "symbol": "LoanService#apply",
+          "line": 30
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.loans.LoanServiceTest",
+          "method": "everyApplicationIsApprovedOrRejectedWithReason",
+          "new": false
+        }
+      ],
+      "notes": ""
+    }
+  ]
+}

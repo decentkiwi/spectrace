@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NBK-BRD-2026-014 Core Banking Services</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 10.5pt; color: #1b1f24; line-height: 1.45; }
+  header { border-bottom: 3px solid #0f62fe; padding-bottom: 8px; margin-bottom: 18px; }
+  header .org { font-size: 9pt; letter-spacing: .08em; text-transform: uppercase; color: #525252; }
+  h1 { font-size: 20pt; margin: 4px 0 2px; }
+  h2 { font-size: 13pt; margin: 22px 0 8px; color: #0f62fe; break-after: avoid; }
+  h3 { font-size: 11pt; margin: 14px 0 6px; break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; }
+  th, td { border: 1px solid #c6c6c6; padding: 5px 7px; vertical-align: top; text-align: left; }
+  th { background: #f2f4f8; font-size: 9pt; }
+  .meta td:first-child { width: 28%; background: #f2f4f8; font-weight: 600; }
+  .req { break-inside: avoid; margin-bottom: 10px; }
+  .req table td:first-child { width: 22%; background: #f7f7f7; font-weight: 600; }
+  .id { font-family: Menlo, monospace; font-weight: 700; color: #0f62fe; }
+  .note { font-size: 9pt; color: #525252; }
+  ul { margin: 4px 0; padding-left: 18px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="org">Northbridge Bank · Digital Banking Programme</div>
+  <h1>Core Banking Services: Business Requirements</h1>
+  <div class="note">Document NBK-BRD-2026-014 · Version 1.1 · Classification: Internal</div>
+</header>
+
+<table class="meta">
+  <tr><td>Owner</td><td>Retail Banking Product Office</td></tr>
+  <tr><td>Approved by</td><td>Head of Retail Products; Head of Technology Risk</td></tr>
+  <tr><td>Effective</td><td>Release 2026.10</td></tr>
+  <tr><td>Related documents</td><td>NBK-NFR-2026-003 (Non-functional requirements), NBK-SEC-2025-021 (Authentication standard)</td></tr>
+</table>
+
+<h2>1. Purpose and scope</h2>
+<p>This document states the functional requirements for the Accounts, Transfers and Loans services of the
+Northbridge core banking platform. Every requirement has a unique identifier of the form
+<span class="id">REQ-&lt;MODULE&gt;-&lt;NN&gt;</span>. Each identifier must be traceable to its implementation and to at least one
+automated test before a release is approved (see MAS Technology Risk Management Guidelines, section 9).</p>
+<p>All monetary amounts are in Singapore Dollars (SGD) and are held to two decimal places.
+"Calendar day" means a day in Singapore Standard Time (UTC+8). Non-functional requirements (performance,
+availability, security controls) are out of scope and are covered in NBK-NFR-2026-003.</p>
+
+<h2>2. Glossary</h2>
+<table>
+  <tr><th>Term</th><th>Meaning</th></tr>
+  <tr><td>Active account</td><td>An account in status ACTIVE. Accounts may also be FROZEN or CLOSED.</td></tr>
+  <tr><td>Payee</td><td>The destination account of a transfer.</td></tr>
+  <tr><td>New payee</td><td>A destination to which the source account has never completed a transfer.</td></tr>
+  <tr><td>Instalment</td><td>The fixed monthly repayment for an amortising loan.</td></tr>
+</table>
+
+<h2>3. Accounts module</h2>
+
+<div class="req"><h3><span class="id">REQ-ACC-01</span> Account opening</h3>
+<table>
+  <tr><td>Requirement</td><td>A customer can open an account by giving their full name, an initial deposit and a 6-digit PIN.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul>
+    <li>A blank or whitespace-only name is rejected.</li>
+    <li>A negative initial deposit is rejected. An initial deposit of SGD 0.00 is allowed.</li>
+    <li>A newly opened account has status ACTIVE and a balance equal to the initial deposit.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-ACC-02</span> Account number format</h3>
+<table>
+  <tr><td>Requirement</td><td>Each account gets an account number made of the prefix "SG" and 8 digits, e.g. SG01234567.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>Account numbers match the pattern <code>SG\d{8}</code>.</li><li>No two accounts share an account number.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-ACC-03</span> Deposits</h3>
+<table>
+  <tr><td>Requirement</td><td>A customer can deposit money into an active account.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>The deposit amount must be greater than zero; zero or negative amounts are rejected.</li><li>The balance increases by exactly the deposited amount.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-ACC-04</span> Withdrawals and insufficient funds</h3>
+<table>
+  <tr><td>Requirement</td><td>A customer can withdraw money from an active account, but never more than the available balance. Overdrafts are not offered.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>A withdrawal larger than the balance is rejected with an insufficient-funds error.</li><li>After a rejected withdrawal, the balance is unchanged.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-ACC-05</span> Account closure</h3>
+<table>
+  <tr><td>Requirement</td><td>An account can be closed only when its balance is exactly SGD 0.00.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>Closing an account with a non-zero balance is rejected, and the account stays ACTIVE.</li><li>Closing an account with a zero balance sets its status to CLOSED.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-ACC-06</span> Frozen accounts</h3>
+<table>
+  <tr><td>Requirement</td><td>An account in status FROZEN cannot receive deposits or make withdrawals.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>A deposit to a frozen account is rejected.</li><li>A withdrawal from a frozen account is rejected.</li><li>The balance of a frozen account is not changed by rejected operations.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-ACC-07</span> PIN lockout</h3>
+<table>
+  <tr><td>Requirement</td><td>To prevent brute-force attacks, an account is automatically frozen after 3 consecutive failed PIN verification attempts.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>After the third consecutive incorrect PIN, the account status becomes FROZEN.</li><li>A successful verification resets the failed-attempt counter to zero.</li><li>Two failures, then a success, then two more failures leaves the account ACTIVE.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-ACC-08</span> Balance enquiry</h3>
+<table>
+  <tr><td>Requirement</td><td>A balance enquiry returns the account balance rounded to two decimal places (half-up).</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>An account holding 10.005 reports a balance of 10.01.</li></ul></td></tr>
+</table></div>
+
+<h2>4. Transfers module</h2>
+
+<div class="req"><h3><span class="id">REQ-TRF-01</span> Atomic funds transfer</h3>
+<table>
+  <tr><td>Requirement</td><td>A transfer debits the source account and credits the destination account as one atomic operation.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>After a completed transfer of X, the source balance is lower by X and the destination balance is higher by X.</li><li>If the credit cannot be applied (e.g. destination not active), the source balance is unchanged.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-TRF-02</span> No self-transfers</h3>
+<table>
+  <tr><td>Requirement</td><td>A transfer where source and destination are the same account is rejected.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>Transferring from an account to itself raises a validation error.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-TRF-03</span> Daily transfer limit</h3>
+<table>
+  <tr><td>Requirement</td><td>The total of outgoing transfers from one account in a calendar day must not exceed SGD 5,000.00. The limit is <b>inclusive</b>: a day's total of exactly SGD 5,000.00 is allowed.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>Given SGD 4,000.00 already transferred today (to an existing payee), a further transfer of SGD 1,000.00 is accepted.</li><li>After that, a transfer of SGD 0.01 is rejected with a daily-limit error.</li><li>Transfers made on a previous calendar day do not count towards today's limit.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-TRF-04</span> New payee review</h3>
+<table>
+  <tr><td>Requirement</td><td>A transfer of more than SGD 1,000.00 to a new payee is held for manual fraud review and not executed immediately.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>A first-time transfer of SGD 1,000.01 or more to a payee has status PENDING_REVIEW, and neither balance changes.</li><li>A first-time transfer of exactly SGD 1,000.00 completes immediately.</li><li>Once one transfer to a payee has completed, later transfers to that payee are not held.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-TRF-05</span> Transfer reference</h3>
+<table>
+  <tr><td>Requirement</td><td>Every transfer gets a unique reference of the form "TRF-" followed by 8 upper-case alphanumeric characters, plus a timestamp.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>References match <code>TRF-[A-Z0-9]{8}</code> and are unique.</li><li>Each transfer records the time it was created.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-TRF-06</span> Transfer history</h3>
+<table>
+  <tr><td>Requirement</td><td>A customer can view the transfer history of an account, including both incoming and outgoing transfers, most recent first.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>History includes transfers where the account is the source or the destination.</li><li>Transfers are listed newest first.</li><li>Transfers between two other accounts do not appear.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-TRF-07</span> Scheduled transfers</h3>
+<table>
+  <tr><td>Requirement</td><td>A customer can schedule a transfer for a future date. The transfer runs automatically on that date and can be cancelled before then.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>A scheduled transfer does not move funds before its execution date.</li><li>On the execution date, the transfer is executed under the same rules as REQ-TRF-01 to REQ-TRF-04.</li><li>A cancelled scheduled transfer is never executed.</li></ul></td></tr>
+</table></div>
+
+<h2>5. Loans module</h2>
+
+<div class="req"><h3><span class="id">REQ-LN-01</span> Loan amount bounds</h3>
+<table>
+  <tr><td>Requirement</td><td>Personal loans can be requested for SGD 1,000.00 to SGD 100,000.00 inclusive.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>999.99 and 100,000.01 are rejected; 1,000.00 and 100,000.00 are eligible.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-LN-02</span> Loan tenure</h3>
+<table>
+  <tr><td>Requirement</td><td>The loan tenure is 12 to 60 months inclusive.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>11 and 61 months are rejected; 12 and 60 months are eligible.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-LN-03</span> Monthly instalment calculation</h3>
+<table>
+  <tr><td>Requirement</td><td>The monthly instalment uses the standard amortisation formula
+    M = P · r · (1+r)<sup>n</sup> / ((1+r)<sup>n</sup> − 1), where r is the annual rate / 12 and n is the tenure in months.
+    The result is rounded to the <b>nearest cent (half-up)</b>.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul>
+    <li>SGD 25,000.00 at 5.5% p.a. over 36 months → instalment SGD 754.90.</li>
+    <li>SGD 60,000.00 at 4.5% p.a. over 48 months → instalment SGD 1,368.21.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-LN-04</span> Affordability check</h3>
+<table>
+  <tr><td>Requirement</td><td>An application is rejected when the applicant's monthly income is less than 3 times the monthly instalment.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>Income below 3× the instalment → REJECTED with an affordability reason.</li><li>Income of 3× the instalment or more → eligible.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-LN-05</span> Interest rate tiers</h3>
+<table>
+  <tr><th>Loan amount</th><th>Annual rate</th></tr>
+  <tr><td>Below SGD 20,000.00</td><td>6.5%</td></tr>
+  <tr><td>SGD 20,000.00 to SGD 50,000.00 inclusive</td><td>5.5%</td></tr>
+  <tr><td>Above SGD 50,000.00</td><td>4.5%</td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-LN-06</span> Early repayment fee</h3>
+<table>
+  <tr><td>Requirement</td><td>A borrower who repays early pays a fee of 2.0% of the outstanding principal, rounded to the nearest cent (half-up).</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>Outstanding principal SGD 12,345.67 → fee SGD 246.91.</li><li>Outstanding principal SGD 10,000.00 → fee SGD 200.00.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-LN-07</span> Loan decision</h3>
+<table>
+  <tr><td>Requirement</td><td>Every loan application gets a decision of APPROVED or REJECTED. Rejected applications carry a human-readable reason.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>Approved loans have no rejection reason; rejected loans always have one.</li><li>A decided application can be retrieved by its identifier.</li></ul></td></tr>
+</table></div>
+
+<h2>6. Change control</h2>
+<table><tr><th>Version</th><th>Change</th></tr><tr><td>1.1</td><td>REQ-LN-06: early repayment fee raised from 1.5% to 2.0% (Pricing Committee, 18 Sep 2026).</td></tr></table>
+<p class="note">Changes to this document need Product Office approval. Engineering must re-establish traceability for
+every changed requirement before the next release.</p>
+
+</body>
+</html>

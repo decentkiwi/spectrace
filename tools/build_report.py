@@ -94,7 +94,7 @@ def load_surefire(app, build_dir):
                 failure = case.find("error")
             if failure is not None:
                 msg = (failure.get("message") or failure.get("type") or "failed").strip()
-                results[key] = ("FAIL", msg.splitlines()[0][:200] if msg else "failed")
+                results[key] = ("FAIL", " ".join(msg.split())[:200] if msg else "failed")
             elif case.find("skipped") is not None:
                 results[key] = ("SKIP", "")
             else:
@@ -231,7 +231,7 @@ def render_html(rows, metrics):
     body = []
     for r in sorted(rows, key=lambda r: (ORDER.index(r["status"]), r["id"])):
         impl = "".join(f"<div><code>{esc(i.get('symbol') or '')}</code> <span class='muted'>"
-                       f"{esc(i.get('file', ''))}{':' + str(i['line']) if i.get('line') else ''}</span></div>"
+                       f"{esc(os.path.basename(i.get('file', '')))}{':' + str(i['line']) if i.get('line') else ''}</span></div>"
                        for i in r["implementation"]) or "<span class='muted'>none found</span>"
         tests = "".join(
             f"<div class='t {t['result'].lower()}'>{'<b class=new-badge>NEW</b> ' if t['new'] else ''}"
@@ -259,7 +259,7 @@ def render_html(rows, metrics):
 * {{ box-sizing:border-box }}
 body {{ margin:0; padding:24px 16px; background:var(--bg); color:var(--fg);
   font:14px/1.45 "IBM Plex Sans","Helvetica Neue",Arial,sans-serif }}
-main {{ max-width:1200px; margin:0 auto }}
+main {{ max-width:1400px; margin:0 auto }}
 h1 {{ margin:0 0 4px; font-size:24px }} .muted {{ color:var(--muted) }}
 .cards {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin:20px 0 }}
 .card {{ background:var(--panel); border-left:4px solid var(--line); padding:12px 14px }}
@@ -268,7 +268,7 @@ h1 {{ margin:0 0 4px; font-size:24px }} .muted {{ color:var(--muted) }}
 .card.failing {{ border-color:var(--failing) }} .card.missing {{ border-color:var(--missing) }}
 .speed {{ font-size:15px }}
 .wrap {{ overflow-x:auto }}
-table {{ width:100%; border-collapse:collapse; min-width:820px }}
+table {{ width:100%; border-collapse:collapse; min-width:1000px }}
 th,td {{ border-bottom:1px solid var(--line); padding:10px 8px; vertical-align:top; text-align:left }}
 th {{ font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted) }}
 .rid {{ font-family:"IBM Plex Mono",Menlo,monospace; font-weight:600 }}
@@ -281,7 +281,7 @@ code {{ font-family:"IBM Plex Mono",Menlo,monospace; font-size:12px }}
 .msg {{ font-size:12px; color:var(--failing) }}
 .new-badge {{ font-size:10px; color:var(--new) }}
 .warn {{ font-size:12px; color:var(--failing) }}
-.notes {{ font-size:13px; max-width:320px }}
+.notes {{ font-size:13px; min-width:260px; max-width:360px }}
 </style></head><body><main>
 <h1>SpecTrace traceability matrix</h1>
 <div class="muted">NBK-BRD-2026-014 → bank-app · generated {esc(metrics['generated_at'])} · statuses checked against Surefire results</div>

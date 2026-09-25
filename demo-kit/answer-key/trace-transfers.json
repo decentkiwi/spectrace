@@ -1,0 +1,151 @@
+{
+  "module": "transfers",
+  "requirements": [
+    {
+      "id": "REQ-TRF-01",
+      "status": "COVERED",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/transfers/TransferService.java",
+          "symbol": "TransferService#transfer",
+          "line": 56
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.transfers.TransferServiceTest",
+          "method": "transferMovesFundsBetweenAccounts",
+          "new": false
+        },
+        {
+          "class": "com.spectrace.bank.transfers.TransferServiceTest",
+          "method": "failedCreditLeavesSourceUnchanged",
+          "new": false
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "REQ-TRF-02",
+      "status": "COVERED",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/transfers/TransferService.java",
+          "symbol": "TransferService#transfer",
+          "line": 35
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.transfers.TransferServiceTest",
+          "method": "cannotTransferToSameAccount",
+          "new": false
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "REQ-TRF-03",
+      "status": "FAILING",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/transfers/TransferService.java",
+          "symbol": "TransferService#transfer",
+          "line": 47
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.transfers.TransfersRequirementsTest",
+          "method": "transferReachingExactlyTheDailyLimitIsAccepted",
+          "new": true
+        },
+        {
+          "class": "com.spectrace.bank.transfers.TransfersRequirementsTest",
+          "method": "transferBeyondTheDailyLimitIsRejected",
+          "new": true
+        },
+        {
+          "class": "com.spectrace.bank.transfers.TransfersRequirementsTest",
+          "method": "previousDaysTransfersDoNotCountTowardsToday",
+          "new": true
+        }
+      ],
+      "notes": "BUG: spec says the SGD 5,000 limit is inclusive, but the code rejects when total >= limit (compareTo(...) >= 0 at TransferService.java:47), so a day total of exactly 5,000.00 is refused. Should be > 0."
+    },
+    {
+      "id": "REQ-TRF-04",
+      "status": "NEW_TEST_PASS",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/transfers/TransferService.java",
+          "symbol": "TransferService#transfer",
+          "line": 52
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.transfers.TransfersRequirementsTest",
+          "method": "largeFirstTransferToNewPayeeIsHeldForReview",
+          "new": true
+        },
+        {
+          "class": "com.spectrace.bank.transfers.TransfersRequirementsTest",
+          "method": "firstTransferOfExactly1000CompletesImmediately",
+          "new": true
+        },
+        {
+          "class": "com.spectrace.bank.transfers.TransfersRequirementsTest",
+          "method": "knownPayeeIsNotHeld",
+          "new": true
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "REQ-TRF-05",
+      "status": "COVERED",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/transfers/TransferService.java",
+          "symbol": "TransferService#nextReference",
+          "line": 96
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.transfers.TransferServiceTest",
+          "method": "everyTransferHasUniqueReferenceAndTimestamp",
+          "new": false
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "REQ-TRF-06",
+      "status": "NEW_TEST_PASS",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/transfers/TransferService.java",
+          "symbol": "TransferService#history",
+          "line": 66
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.transfers.TransfersRequirementsTest",
+          "method": "historyListsIncomingAndOutgoingNewestFirst",
+          "new": true
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "REQ-TRF-07",
+      "status": "NOT_IMPLEMENTED",
+      "implementation": [],
+      "tests": [],
+      "notes": "No scheduling support: no execution date on Transfer, and no scheduler or cancel API. Would need a ScheduledTransfer entity plus @Scheduled execution in the transfers package."
+    }
+  ]
+}
