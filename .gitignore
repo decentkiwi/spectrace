@@ -1,0 +1,4 @@
+bank-app/target*/
+.DS_Store
+spectrace-out/*
+!spectrace-out/.gitkeep
