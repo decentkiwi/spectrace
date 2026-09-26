@@ -1,0 +1,66 @@
+# spectrace.yaml — Python / pytest project example
+#
+# Drop this at the root of your Python project and rename to spectrace.yaml.
+# Requires: pytest, pytest-junit-xml (pip install pytest pytest-junit-xml)
+#
+# Requirement tags use pytest marks.  Add to conftest.py:
+#   import pytest
+#   def pytest_configure(config):
+#       for i in range(1, 99):
+#           for mod in ["AUTH","USER","ORD","PAY"]:
+#               config.addinivalue_line("markers", f"REQ_{mod}_{i:02d}: requirement")
+#
+# Then tag your tests:
+#   @pytest.mark.REQ_AUTH_01
+#   def test_login_requires_password():
+#       ...
+
+project: my-python-service
+stack: python-pytest
+app_dir: .                        # project root IS the app root
+
+test_cmd: >-
+  python -m pytest
+  --junit-xml=spectrace-results/results.xml
+  -p no:warnings -q
+  --ignore=spectrace-results
+  || true                         # don't fail the trace run on test failures
+
+module_test_cmd: >-
+  python -m pytest
+  src/{pkg}/
+  --junit-xml=spectrace-results/results-{module}.xml
+  -p no:warnings -q
+  || true
+
+result_format: pytest-xml
+result_dir: spectrace-results
+
+# pytest marks use underscores; the pattern captures e.g. REQ_AUTH_01
+# and build_report.py normalises underscores → hyphens → REQ-AUTH-01
+tag_pattern: '@pytest\.mark\.(REQ_[A-Z]+_\d+)'
+tag_normalise: underscore-to-hyphen   # REQ_AUTH_01 → REQ-AUTH-01
+
+test_source_glob: "**/*_test.py"
+
+modules:
+  - name: auth
+    pkg: auth
+    src_glob: src/auth/**/*.py
+    test_class: test_auth_requirements   # pytest file name
+    req_prefix: REQ-AUTH
+
+  - name: users
+    pkg: users
+    src_glob: src/users/**/*.py
+    test_class: test_users_requirements
+    req_prefix: REQ-USER
+
+  - name: orders
+    pkg: orders
+    src_glob: src/orders/**/*.py
+    test_class: test_orders_requirements
+    req_prefix: REQ-ORD
+
+conventions_file: .bob/rules/traceability-conventions.md
+manual_minutes_per_requirement: 30

@@ -133,7 +133,7 @@ The security layer is tested via the existing service tests (using `NoOpPassword
 | Spec change | redo the spreadsheet | re-trace only changed modules |
 | Audit evidence | a spreadsheet you have to trust | matrix built from actual test results + release-notes.md |
 
-## Run it
+## Run it (bank-app demo)
 
 Requirements: JDK 21+, Python 3, IBM Bob (IDE) with this folder open as the workspace.
 
@@ -156,6 +156,7 @@ To reset to the pre-demo baseline: `demo-kit/reset.sh` (uncommitted `bank-app/sr
 After a good live run: `demo-kit/record-run.sh` saves it as the answer key, so the fallback replays real Bob output.
 
 ### Use it as a release gate
+
 `build_report.py` can fail a pipeline:
 
 ```bash
@@ -163,3 +164,53 @@ python3 tools/build_report.py --fail-on FAILING,NOT_IMPLEMENTED --fail-on-disagr
 ```
 
 The exit code is 1 if any requirement has one of those statuses, or if a subagent's claim contradicts the evidence.
+
+---
+
+## Bring SpecTrace to your own project
+
+### 1. Drop in `spectrace.yaml`
+
+Copy the template that matches your stack and place it at your workspace root:
+
+| Stack | Example config |
+|---|---|
+| Java / Maven | [`docs/examples/spectrace-python-pytest.yaml`](docs/examples/spectrace-python-pytest.yaml) (swap for Maven fields from `spectrace.yaml`) |
+| Java / Gradle | Same as Maven — change `test_cmd` to `./gradlew test` and `result_dir` |
+| **Python / pytest** | [`docs/examples/spectrace-python-pytest.yaml`](docs/examples/spectrace-python-pytest.yaml) |
+| **Node.js / Jest** | [`docs/examples/spectrace-node-jest.yaml`](docs/examples/spectrace-node-jest.yaml) |
+| **Go / go test** | [`docs/examples/spectrace-go-testing.yaml`](docs/examples/spectrace-go-testing.yaml) |
+
+### 2. Tag your tests
+
+Each stack has a tagging convention that `build_report.py` understands:
+
+| Stack | How to tag | Example |
+|---|---|---|
+| Java / JUnit 5 | `@Tag("REQ-MOD-01")` | `@Tag("REQ-ACC-01")` |
+| Python / pytest | `@pytest.mark.REQ_MOD_01` | `@pytest.mark.REQ_AUTH_01` |
+| Node.js / Jest | `// @req REQ-MOD-01` on the line above `test(` | `// @req REQ-AUTH-01` |
+| Go | `// req: REQ-MOD-01` on the line above `func Test` | `// req: REQ-AUTH-01` |
+
+### 3. Run SpecTrace
+
+Open your project folder in IBM Bob and type:
+
+```
+/trace docs/your-requirements.pdf
+```
+
+SpecTrace reads `spectrace.yaml`, extracts all `REQ-*` IDs from the PDF, spawns one subagent per
+module in parallel, writes the missing tests in your language, runs them, and produces
+`spectrace-out/matrix.html` — with a time-saved banner, diff view, and CI-ready exit code.
+
+### What `build_report.py` handles for each stack
+
+| Feature | Java | Python | Node | Go |
+|---|---|---|---|---|
+| Tag scanning | `@Tag(...)` | `@pytest.mark.REQ_*` | `// @req` | `// req:` |
+| Result XML | Surefire | pytest `--junit-xml` | jest-junit | go-junit-report |
+| Nested `<testsuites>` | ✓ | ✓ | ✓ | ✓ |
+| Baseline (new vs existing) | ✓ | ✓ | ✓ | ✓ |
+| `file:line` reference check | ✓ | ✓ | ✓ | ✓ |
+| `--fail-on` CI gate | ✓ | ✓ | ✓ | ✓ |

@@ -1,0 +1,91 @@
+# spectrace.yaml — project configuration for SpecTrace
+#
+# Place this file at the workspace root. SpecTrace reads it to know how to
+# build your project, where tests live, and how requirements are tagged.
+# Every field has a sensible default; only override what differs.
+#
+# Supported stacks out of the box:
+#   java-maven  · java-gradle  · python-pytest  · node-jest  · go-testing
+#
+# ── Project identity ──────────────────────────────────────────────────────────
+project: spectrace-bank           # human-readable name shown in the matrix
+
+# ── Stack ─────────────────────────────────────────────────────────────────────
+stack: java-maven                 # selects defaults for all fields below
+
+# ── Application root ─────────────────────────────────────────────────────────
+app_dir: bank-app                 # directory containing the buildable project
+
+# ── Build & test command ──────────────────────────────────────────────────────
+# The command run from `app_dir` to compile and execute the full test suite.
+# Failures are expected during tracing; always pass the "ignore failures" flag.
+test_cmd: ./mvnw -q test -Dmaven.test.failure.ignore=true
+
+# Per-module isolation: run only one module's tests in a separate build output dir.
+# Placeholders: {module} → module name, {pkg} → package/path of the module.
+# Leave blank if the stack doesn't support isolated module runs.
+module_test_cmd: >-
+  ./mvnw -q test
+  -Dspectrace.buildDir=target-{module}
+  -Dtest='{pkg}.**'
+  -Dmaven.test.failure.ignore=true
+
+# ── Test results ──────────────────────────────────────────────────────────────
+# Format of the XML test result files produced by the test runner.
+# Options: surefire | pytest-xml | jest-junit | go-junit
+result_format: surefire
+
+# Where result XML files are written (relative to app_dir).
+# {build_dir} is substituted at runtime (default: target, or target-{module} for isolation).
+result_dir: "{build_dir}/surefire-reports"
+
+# ── Requirement tag pattern ───────────────────────────────────────────────────
+# Regex with one capture group that extracts a REQ-* ID from a single source line.
+# The pattern is searched line-by-line through all test source files.
+#
+# Java / JUnit 5:       @Tag\(\s*"(REQ-[A-Z]+-\d+)"\s*\)
+# Python / pytest:      @pytest\.mark\.(REQ_[A-Z]+_\d+)     (dots → underscores)
+# Python / pytest:      \bREQ_([A-Z]+_\d+)\b                (alternative)
+# JavaScript / Jest:    @req\s+(REQ-[A-Z]+-\d+)             (JSDoc comment)
+# Go:                   //\s*req:\s*(REQ-[A-Z]+-\d+)
+tag_pattern: '@Tag\(\s*"(REQ-[A-Z]+-\d+)"\s*\)'
+
+# Glob pattern (relative to app_dir) for test source files to scan for tags.
+test_source_glob: src/test/java/**/*.java
+
+# ── Modules ───────────────────────────────────────────────────────────────────
+# Each module maps to a source package/path and a REQ-* prefix.
+# `pkg` is used in module_test_cmd and in subagent prompts.
+# `src_glob` is used by subagents to locate production source files.
+# `test_class` is the name of the Requirements test class the subagent writes.
+modules:
+  - name: accounts
+    pkg: com.spectrace.bank.accounts
+    src_glob: src/main/java/com/spectrace/bank/accounts/**/*.java
+    test_class: AccountsRequirementsTest
+    req_prefix: REQ-ACC
+
+  - name: transfers
+    pkg: com.spectrace.bank.transfers
+    src_glob: src/main/java/com/spectrace/bank/transfers/**/*.java
+    test_class: TransfersRequirementsTest
+    req_prefix: REQ-TRF
+
+  - name: loans
+    pkg: com.spectrace.bank.loans
+    src_glob: src/main/java/com/spectrace/bank/loans/**/*.java
+    test_class: LoansRequirementsTest
+    req_prefix: REQ-LN
+
+  - name: security
+    pkg: com.spectrace.bank.security
+    src_glob: src/main/java/com/spectrace/bank/security/**/*.java
+    test_class: SecurityRequirementsTest
+    req_prefix: REQ-SEC
+
+# ── Traceability conventions ──────────────────────────────────────────────────
+# Appended to every subagent prompt so it knows the house rules.
+conventions_file: .bob/rules/traceability-conventions.md
+
+# ── Timing ───────────────────────────────────────────────────────────────────
+manual_minutes_per_requirement: 30   # used to compute the time-saved banner

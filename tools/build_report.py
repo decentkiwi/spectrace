@@ -2,13 +2,22 @@
 """SpecTrace report builder.
 
 Merges the per-module trace files written by Bob's subagents with the *actual*
-evidence on disk (Surefire XML results + @Tag annotations in test sources) and
+evidence on disk (test result XML + tag annotations in test sources) and
 produces the traceability matrix. Statuses are recomputed from evidence, never
 taken from the agents on trust; disagreements are flagged in the report.
 
 Usage (from repo root):
     python3 tools/build_report.py [--out spectrace-out] [--app bank-app] [--baseline-ref REF]
                                   [--fail-on FAILING,NOT_IMPLEMENTED] [--fail-on-disagreement]
+                                  [--config spectrace.yaml]
+
+Configuration (spectrace.yaml at repo root) controls:
+  - tag_pattern        regex to extract REQ-* IDs from test source lines
+  - tag_normalise      'underscore-to-hyphen' for pytest-style REQ_MOD_01 marks
+  - test_source_glob   glob to find test source files (relative to app_dir)
+  - result_format      surefire | pytest-xml | jest-junit | go-junit
+  - result_dir         where XML test results are written (relative to app_dir)
+  - app_dir            directory containing the buildable project
 
 The baseline (used to tell Bob's new tests from pre-existing ones) defaults to the git tag
 `spectrace-baseline`, falling back to HEAD. Pin the tag before a run so that committing
@@ -25,6 +34,47 @@ import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
+# ── YAML is optional: fall back to a thin parser for simple key: value files ──
+try:
+    import yaml as _yaml
+    def _load_yaml(path):
+        with open(path, encoding="utf-8") as f:
+            return _yaml.safe_load(f)
+except ImportError:
+    def _load_yaml(path):
+        """Minimal YAML loader: handles key: value, key: | block scalars, and list items."""
+        result = {}
+        with open(path, encoding="utf-8") as f:
+            lines = f.readlines()
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                i += 1
+                continue
+            if stripped.startswith("- "):
+                i += 1
+                continue   # skip list items at root level (modules parsed separately)
+            m = re.match(r'^(\w[\w_-]*):\s*(.*)', line)
+            if m:
+                key, val = m.group(1), m.group(2).strip()
+                if val in ("", "|", ">", ">-"):
+                    # block scalar — collect continuation lines
+                    block = []
+                    i += 1
+                    while i < len(lines) and (lines[i].startswith(" ") or lines[i].strip() == ""):
+                        block.append(lines[i].strip())
+                        i += 1
+                    result[key] = " ".join(b for b in block if b)
+                elif val and not val.startswith("#"):
+                    result[key] = val.strip('"\'')
+                else:
+                    i += 1
+                    continue
+            i += 1
+        return result
+
 STATUSES = {
     "COVERED": ("Covered", "Existing tests prove the requirement"),
     "NEW_TEST_PASS": ("Newly tested", "Bob wrote the missing tests and they pass"),
@@ -35,38 +85,108 @@ STATUSES = {
 }
 ORDER = ["FAILING", "NOT_IMPLEMENTED", "UNTESTED", "UNVERIFIED", "NEW_TEST_PASS", "COVERED"]
 
+# ── Defaults (Java / Maven / JUnit 5) ────────────────────────────────────────
+_DEFAULTS = {
+    "tag_pattern":       r'@Tag\(\s*"(REQ-[A-Z]+-\d+)"\s*\)',
+    "tag_normalise":     None,
+    "test_source_glob":  "src/test/java/**/*.java",
+    "result_format":     "surefire",
+    "result_dir":        "{build_dir}/surefire-reports",
+}
+
+_TEST_MARKERS = {
+    # format → set of strings that signal "this line is a test declaration"
+    "surefire":    {"@Test", "@ParameterizedTest"},
+    "pytest-xml":  {"def test_"},
+    "jest-junit":  {"test(", "it(", "test(`", "it(`"},
+    "go-junit":    {"func Test"},
+}
+
+
+def load_config(config_path=None):
+    """Load spectrace.yaml; return a dict of effective settings."""
+    cfg = dict(_DEFAULTS)
+    if config_path is None:
+        config_path = "spectrace.yaml"
+    if os.path.exists(config_path):
+        raw = _load_yaml(config_path)
+        if raw:
+            cfg.update({k: v for k, v in raw.items() if v is not None})
+    return cfg
+
+
+def _normalise_tag(tag, normalise):
+    if normalise == "underscore-to-hyphen":
+        # REQ_AUTH_01 → REQ-AUTH-01
+        return tag.replace("_", "-")
+    return tag
+
+
 TAG_RE = re.compile(r'@Tag\(\s*"(REQ-[A-Z]+-\d+)"\s*\)')
 METHOD_RE = re.compile(r'^\s*(?:public\s+|protected\s+|private\s+)?void\s+(\w+)\s*\(')
 PACKAGE_RE = re.compile(r'^\s*package\s+([\w.]+)\s*;', re.M)
 
 
-def scan_tags(source, fqcn_hint=None):
-    """Return {req_id: [(class, method)]} for @Test methods carrying @Tag(REQ-...)."""
+def scan_tags(source, fqcn_hint=None, cfg=None):
+    """Return {req_id: [(class, method)]} for test methods carrying a REQ-* tag.
+
+    Supports Java (@Tag), Python (pytest.mark), JavaScript (// @req), and Go (// req:)
+    via the tag_pattern and result_format fields in cfg (defaults to Java/JUnit 5).
+    """
+    if cfg is None:
+        cfg = _DEFAULTS
+    tag_re = re.compile(cfg["tag_pattern"])
+    normalise = cfg.get("tag_normalise")
+    fmt = cfg.get("result_format", "surefire")
+    test_signals = _TEST_MARKERS.get(fmt, _TEST_MARKERS["surefire"])
+
     pkg = PACKAGE_RE.search(source)
     found = {}
     pending_tags, is_test = [], False
     class_name = fqcn_hint
+
     for line in source.splitlines():
+        # Java: track class name for FQCN
         cls = re.search(r'\bclass\s+(\w+)', line)
         if cls and class_name is None:
             class_name = (pkg.group(1) + "." if pkg else "") + cls.group(1)
-        if "@Test" in line or "@ParameterizedTest" in line:
+
+        # Is this line a test declaration?
+        if any(sig in line for sig in test_signals):
             is_test = True
-        pending_tags += TAG_RE.findall(line)
+
+        # Collect any req tags on this line
+        for raw_tag in tag_re.findall(line):
+            pending_tags.append(_normalise_tag(raw_tag, normalise))
+
+        # Detect method/function name
         m = METHOD_RE.match(line)
+        if m is None:
+            # Python / JS / Go: match def/test/func
+            m = re.match(r'^\s*(?:def|async def)\s+(test\w*)\s*\(', line)  # pytest
+        if m is None:
+            m = re.match(r'^\s*(?:test|it)\s*\(\s*[\'"`]([^\'"`]+)[\'"`]', line)  # jest
+        if m is None:
+            m = re.match(r'^func\s+(Test\w+)\s*\(', line)  # go
+
         if m:
             if is_test:
+                name = m.group(1)
                 for tag in pending_tags:
-                    found.setdefault(tag, []).append((class_name, m.group(1)))
+                    found.setdefault(tag, []).append((class_name or "", name))
             pending_tags, is_test = [], False
+
     return found
 
 
-def scan_test_tree(app):
+def scan_test_tree(app, cfg=None):
+    if cfg is None:
+        cfg = _DEFAULTS
+    src_glob = cfg.get("test_source_glob", _DEFAULTS["test_source_glob"])
     result = {}
-    for path in glob.glob(os.path.join(app, "src/test/java/**/*.java"), recursive=True):
+    for path in glob.glob(os.path.join(app, src_glob), recursive=True):
         with open(path, encoding="utf-8") as f:
-            for req, tests in scan_tags(f.read()).items():
+            for req, tests in scan_tags(f.read(), cfg=cfg).items():
                 result.setdefault(req, []).extend(tests)
     return result
 
@@ -83,39 +203,64 @@ def resolve_baseline(app, requested):
     return BASELINE_TAG if probe.returncode == 0 else "HEAD"
 
 
-def scan_baseline(app, ref):
+def scan_baseline(app, ref, cfg=None):
     """Tagged tests that already existed at `ref` (git), so we can tell new from old."""
+    if cfg is None:
+        cfg = _DEFAULTS
+    src_glob = cfg.get("test_source_glob", _DEFAULTS["test_source_glob"])
+    # Determine git-visible path prefix from the glob (everything before the first **)
+    git_prefix = src_glob.split("**")[0].rstrip("/")
     try:
-        files = subprocess.run(["git", "ls-tree", "-r", "--name-only", ref, "--", "src/test/java"],
+        files = subprocess.run(["git", "ls-tree", "-r", "--name-only", ref, "--", git_prefix],
                                cwd=app, capture_output=True, text=True, check=True).stdout.split()
     except (subprocess.CalledProcessError, FileNotFoundError):
         return None
+    # Accept any extension the glob implies (java, py, ts, js, go, …)
+    ext = os.path.splitext(src_glob.replace("**/*", ""))[1] or ""
     result = set()
     for rel in files:
-        if not rel.endswith(".java"):
+        if ext and not rel.endswith(ext):
             continue
         src = subprocess.run(["git", "show", f"{ref}:./{rel}"], cwd=app,
                              capture_output=True, text=True).stdout
-        for req, tests in scan_tags(src).items():
+        for req, tests in scan_tags(src, cfg=cfg).items():
             result.update((req, c, m) for c, m in tests)
     return result
 
 
-def load_surefire(app, build_dir):
+def load_surefire(app, build_dir, cfg=None):
+    """Load test results from XML files. Supports surefire, pytest-xml, jest-junit, go-junit."""
+    if cfg is None:
+        cfg = _DEFAULTS
+    result_dir_tpl = cfg.get("result_dir", _DEFAULTS["result_dir"])
+    result_dir = result_dir_tpl.replace("{build_dir}", build_dir)
     results = {}
-    for path in glob.glob(os.path.join(app, build_dir, "surefire-reports", "TEST-*.xml")):
-        for case in ET.parse(path).getroot().iter("testcase"):
-            key = (case.get("classname"), case.get("name"))
-            failure = case.find("failure")
-            if failure is None:
-                failure = case.find("error")
-            if failure is not None:
-                msg = (failure.get("message") or failure.get("type") or "failed").strip()
-                results[key] = ("FAIL", " ".join(msg.split())[:200] if msg else "failed")
-            elif case.find("skipped") is not None:
-                results[key] = ("SKIP", "")
-            else:
-                results[key] = ("PASS", "")
+    xml_glob = os.path.join(app, result_dir, "TEST-*.xml")
+    xml_files = glob.glob(xml_glob)
+    # pytest-xml / jest-junit / go-junit often omit the TEST- prefix
+    if not xml_files:
+        xml_files = glob.glob(os.path.join(app, result_dir, "*.xml"))
+    for path in xml_files:
+        try:
+            tree = ET.parse(path)
+        except ET.ParseError:
+            continue
+        root = tree.getroot()
+        # Both <testsuite> (single) and <testsuites><testsuite> (nested) are handled
+        suites = [root] if root.tag == "testsuite" else root.findall(".//testsuite")
+        for suite in suites:
+            for case in suite.iter("testcase"):
+                key = (case.get("classname") or suite.get("name") or "", case.get("name") or "")
+                failure = case.find("failure")
+                if failure is None:
+                    failure = case.find("error")
+                if failure is not None:
+                    msg = (failure.get("message") or failure.get("type") or "failed").strip()
+                    results[key] = ("FAIL", " ".join(msg.split())[:200] if msg else "failed")
+                elif case.find("skipped") is not None:
+                    results[key] = ("SKIP", "")
+                else:
+                    results[key] = ("PASS", "")
     return results
 
 
@@ -156,7 +301,9 @@ def load_json(path, default=None):
         return json.load(f)
 
 
-def build(out, app, baseline_ref, build_dir):
+def build(out, app, baseline_ref, build_dir, cfg=None):
+    if cfg is None:
+        cfg = _DEFAULTS
     reqs = load_json(os.path.join(out, "requirements.json"))
     if not reqs:
         sys.exit(f"missing {out}/requirements.json. Run the extractor first")
@@ -169,9 +316,9 @@ def build(out, app, baseline_ref, build_dir):
         for entry in load_json(path).get("requirements", []):
             claims[entry["id"]] = entry
 
-    tagged = scan_test_tree(app)
-    baseline = scan_baseline(app, baseline_ref)
-    surefire = load_surefire(app, build_dir)
+    tagged = scan_test_tree(app, cfg=cfg)
+    baseline = scan_baseline(app, baseline_ref, cfg=cfg)
+    surefire = load_surefire(app, build_dir, cfg=cfg)
 
     # Load previous run's statuses for diff view. main() rotates matrix-curr.json to
     # matrix-prev.json only after build() returns, so matrix-curr.json is still the last run here.
@@ -456,22 +603,33 @@ tr.changed-row > td:first-child {{ border-left:3px solid var(--changed-border) }
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="spectrace-out")
-    ap.add_argument("--app", default="bank-app")
-    ap.add_argument("--build-dir", default="target")
+    ap.add_argument("--app", default=None,
+                    help="app directory (default: app_dir from spectrace.yaml, else 'bank-app')")
+    ap.add_argument("--build-dir", default=None,
+                    help="build output dir (default: from spectrace.yaml result_dir, else 'target')")
     ap.add_argument("--baseline-ref", default=None,
                     help=f"git ref of the pre-SpecTrace test suite (default: tag {BASELINE_TAG}, else HEAD)")
     ap.add_argument("--fail-on", default="",
                     help="comma-separated statuses that make the exit code 1, e.g. FAILING,NOT_IMPLEMENTED")
     ap.add_argument("--fail-on-disagreement", action="store_true",
                     help="exit 1 if any subagent claim contradicts the evidence (status or file:line)")
+    ap.add_argument("--config", default=None,
+                    help="path to spectrace.yaml (default: spectrace.yaml in current directory)")
     args = ap.parse_args()
+
+    cfg = load_config(args.config)
+
+    # CLI flags win over config; config wins over hard-coded defaults
+    app = args.app or cfg.get("app_dir", "bank-app")
+    build_dir = args.build_dir or "target"
+
     fail_on = {s.strip().upper() for s in args.fail_on.split(",") if s.strip()}
     unknown = fail_on - set(STATUSES)
     if unknown:
         sys.exit(f"--fail-on: unknown status {', '.join(sorted(unknown))}; choose from {', '.join(STATUSES)}")
 
-    baseline_ref = resolve_baseline(args.app, args.baseline_ref)
-    rows, metrics, doc_id = build(args.out, args.app, baseline_ref, args.build_dir)
+    baseline_ref = resolve_baseline(app, args.baseline_ref)
+    rows, metrics, doc_id = build(args.out, app, baseline_ref, build_dir, cfg=cfg)
 
     # Snapshot current rows for next diff run before overwriting
     matrix_prev_path = os.path.join(args.out, "matrix-prev.json")

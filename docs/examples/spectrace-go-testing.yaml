@@ -1,0 +1,55 @@
+# spectrace.yaml — Go / go test project example
+#
+# Drop this at the root of your Go module and rename to spectrace.yaml.
+# Requires: go-junit-report  (go install github.com/jstemmer/go-junit-report/v2@latest)
+#
+# Tag tests with a comment on the line immediately above the test function:
+#   // req: REQ-AUTH-01
+#   func TestLoginWrongPassword(t *testing.T) { ... }
+#
+# Run all tests and produce JUnit XML:
+#   go test ./... -v 2>&1 | go-junit-report -set-exit-code > spectrace-results/results.xml
+
+project: my-go-service
+stack: go-testing
+app_dir: .
+
+test_cmd: >-
+  go test ./... -v 2>&1 |
+  go-junit-report -set-exit-code > spectrace-results/results.xml;
+  true
+
+module_test_cmd: >-
+  go test ./{pkg}/... -v 2>&1 |
+  go-junit-report -set-exit-code > spectrace-results/results-{module}.xml;
+  true
+
+result_format: go-junit
+result_dir: spectrace-results
+
+# Matches: // req: REQ-AUTH-01
+tag_pattern: '//\s*req:\s*(REQ-[A-Z]+-\d+)'
+
+test_source_glob: "**/*_test.go"
+
+modules:
+  - name: auth
+    pkg: internal/auth
+    src_glob: internal/auth/**/*.go
+    test_class: auth_requirements_test
+    req_prefix: REQ-AUTH
+
+  - name: accounts
+    pkg: internal/accounts
+    src_glob: internal/accounts/**/*.go
+    test_class: accounts_requirements_test
+    req_prefix: REQ-ACC
+
+  - name: payments
+    pkg: internal/payments
+    src_glob: internal/payments/**/*.go
+    test_class: payments_requirements_test
+    req_prefix: REQ-PAY
+
+conventions_file: .bob/rules/traceability-conventions.md
+manual_minutes_per_requirement: 30

@@ -1,0 +1,65 @@
+# spectrace.yaml — Node.js / Jest project example
+#
+# Drop this at the root of your Node project and rename to spectrace.yaml.
+# Requires: jest, jest-junit  (npm install --save-dev jest jest-junit)
+#
+# Add to package.json:
+#   "jest": {
+#     "reporters": ["default", ["jest-junit", {"outputDirectory": "spectrace-results"}]]
+#   }
+#
+# Tag tests with a JSDoc-style comment on the line above the test:
+#   // @req REQ-AUTH-01
+#   test('login with wrong password returns 401', () => { ... })
+#
+# Or using a custom matcher helper (see docs/examples/jest-req-helper.js):
+#   req('REQ-AUTH-01', 'login with wrong password returns 401', () => { ... })
+
+project: my-node-service
+stack: node-jest
+app_dir: .
+
+test_cmd: >-
+  npx jest
+  --forceExit
+  --passWithNoTests
+  2>/dev/null
+  || true
+
+module_test_cmd: >-
+  npx jest
+  --testPathPattern="{pkg}"
+  --forceExit
+  --passWithNoTests
+  2>/dev/null
+  || true
+
+result_format: jest-junit
+result_dir: spectrace-results
+
+# Matches: // @req REQ-AUTH-01   (JSDoc comment above a test)
+tag_pattern: '//\s*@req\s+(REQ-[A-Z]+-\d+)'
+
+test_source_glob: "**/*.test.{js,ts}"
+
+modules:
+  - name: auth
+    pkg: src/auth
+    src_glob: src/auth/**/*.{js,ts}
+    test_class: auth.requirements.test
+    req_prefix: REQ-AUTH
+
+  - name: users
+    pkg: src/users
+    src_glob: src/users/**/*.{js,ts}
+    test_class: users.requirements.test
+    req_prefix: REQ-USER
+
+  - name: payments
+    pkg: src/payments
+    src_glob: src/payments/**/*.{js,ts}
+    test_class: payments.requirements.test
+    req_prefix: REQ-PAY
+
+conventions_file: .bob/rules/traceability-conventions.md
+manual_minutes_per_requirement: 30
