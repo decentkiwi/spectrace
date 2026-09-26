@@ -239,6 +239,70 @@ class TimingAndGate(unittest.TestCase):
         self.assertIn("unknown status", result.stderr)
 
 
+class ReferenceCheck(unittest.TestCase):
+    """Subagents cite file:line for each implementation; stale or invented locations are flagged."""
+
+    SOURCE = textwrap.dedent("""\
+        package com.example;
+
+        public class Svc {
+            private final String pinHash;
+
+            public synchronized Transfer transfer(String from, String to) {
+                if (from.equals(to)) {
+                    throw new IllegalArgumentException();
+                }
+                return null;
+            }
+
+            private static String nextReference() {
+                return "TRF-1";
+            }
+        }
+        """)
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.path = os.path.join(tmp.name, "Svc.java")
+        with open(self.path, "w") as f:
+            f.write(self.SOURCE)
+
+    def check(self, symbol, line):
+        return build_report.check_reference({"file": self.path, "symbol": symbol, "line": line})
+
+    def test_declaration_body_and_field_lines_are_accepted(self):
+        self.assertIsNone(self.check("Svc#transfer", 6))
+        self.assertIsNone(self.check("Svc#transfer", 8))
+        self.assertIsNone(self.check("Svc#pinHash", 4))
+        self.assertIsNone(self.check("Svc#nextReference", 14))
+
+    def test_line_inside_another_method_is_flagged(self):
+        self.assertIn("inside nextReference(), not transfer", self.check("Svc#transfer", 14))
+
+    def test_line_past_end_of_file_is_flagged(self):
+        self.assertIn("outside", self.check("Svc#transfer", 400))
+
+    def test_missing_file_is_flagged(self):
+        self.assertIn("does not exist",
+                      build_report.check_reference({"file": self.path + ".nope", "symbol": "Svc#x", "line": 1}))
+
+    def test_bad_reference_fails_the_disagreement_gate(self):
+        f = Fixture()
+        self.addCleanup(f.tmp.cleanup)
+        f.requirements("REQ-A-01")
+        f.test_class("ReqTest", {"t1": ["REQ-A-01"]})
+        f.results("ReqTest", {"t1": "pass"})
+        entry = claim("REQ-A-01", "NEW_TEST_PASS", "t1")
+        entry["implementation"] = [{"file": self.path, "symbol": "Svc#transfer", "line": 14}]
+        f.claims("a", entry)
+
+        result = f.cli("--fail-on-disagreement")
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("REQ-A-01 (bad reference)", result.stdout)
+
+
 class TagScanner(unittest.TestCase):
 
     def test_multiple_tags_and_parameterized_tests(self):

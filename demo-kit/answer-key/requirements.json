@@ -225,6 +225,65 @@
         "Approved loans have no rejection reason; rejected loans always have one.",
         "A decided application can be retrieved by its identifier."
       ]
+    },
+    {
+      "id": "REQ-SEC-01",
+      "module": "security",
+      "title": "PIN protection",
+      "text": "Customer PINs are stored only as a salted one-way hash, never in plain text, and are never returned by the API.",
+      "acceptance_criteria": [
+        "The stored PIN value for an account is not the plain-text PIN.",
+        "The correct PIN verifies successfully; an incorrect PIN does not.",
+        "Account data returned by the API contains no PIN or PIN hash field."
+      ]
+    },
+    {
+      "id": "REQ-SEC-02",
+      "module": "security",
+      "title": "Session tokens",
+      "text": "A successful login issues a signed session token that identifies the customer's account and expires 60 minutes after it is issued.",
+      "acceptance_criteria": [
+        "A freshly issued token is accepted and identifies the account it was issued for.",
+        "A token whose content or signature has been altered is rejected.",
+        "An expired token is rejected.",
+        "The token lifetime is 60 minutes."
+      ]
+    },
+    {
+      "id": "REQ-SEC-03",
+      "module": "security",
+      "title": "Login throttling",
+      "text": "After 5 failed login attempts for an account within 15 minutes, further login attempts for that account are refused until the window has passed. This temporary throttle is separate from the permanent freeze in REQ-ACC-07.",
+      "acceptance_criteria": [
+        "After 5 failed attempts, the next attempt for that account is refused, even with the correct PIN.",
+        "4 failed attempts do not block the account.",
+        "A successful login resets the failed-attempt count.",
+        "Failed attempts on one account do not affect other accounts."
+      ]
+    },
+    {
+      "id": "REQ-SEC-04",
+      "module": "security",
+      "title": "Audit trail",
+      "text": "Security-relevant events are recorded in an append-only audit log with a timestamp, the account number and the event type.",
+      "acceptance_criteria": [
+        "Successful and failed logins are recorded.",
+        "Deposits, withdrawals (including rejected withdrawals) and completed transfers are recorded.",
+        "Account freezes and closures are recorded.",
+        "Audit entries cannot be modified or removed through the audit log's interface."
+      ]
+    },
+    {
+      "id": "REQ-SEC-05",
+      "module": "security",
+      "title": "Account ownership",
+      "text": "A logged-in customer may only act on their own account. Viewing account details or balance, withdrawing, closing, viewing transfer history and sending a transfer from an account are only allowed for the customer logged in to that account.",
+      "acceptance_criteria": [
+        "A customer requesting another customer's account details is refused with HTTP 403.",
+        "A customer attempting a transfer from another customer's account is refused with HTTP 403, and no money moves.",
+        "A customer can view their own account details.",
+        "Requests without a valid session token are refused."
+      ]
     }
   ]
 }

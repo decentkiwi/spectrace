@@ -16,7 +16,7 @@ or developer builds this by hand:
 3. Write the tests that are missing.
 4. Keep a spreadsheet up to date, then redo it every time the spec changes.
 
-This costs **hours per release** (we estimate ~30 min per requirement, so ~11 h for our 22-requirement spec).
+This costs **hours per release** (we estimate ~30 min per requirement, so ~13.5 h for our 27-requirement spec).
 It's also error-prone: requirements get skipped, "covered" tests don't actually check the acceptance
 criterion, and when a spec change isn't reflected in the code, nobody notices.
 
@@ -24,17 +24,18 @@ criterion, and when a spec change isn't reflected in the code, nobody notices.
 
 ```
 docs/requirements.pdf ──► 🧭 SpecTrace mode (orchestrator)
-                             │ Phase 1: document understanding → requirements.json (22 reqs, verbatim ACs)
-                             │ Phase 2: 3 parallel subagents, one per module
+                             │ Phase 1: document understanding → requirements.json (27 reqs, verbatim ACs)
+                             │ Phase 2: 4 parallel subagents, one per module
                              ▼
-      ┌──────────────┬──────────────┬──────────────┐
-      │ accounts     │ transfers    │ loans        │   each subagent:
-      │ subagent     │ subagent     │ subagent     │   locate code → find @Tag'd tests →
-      └──────┬───────┴──────┬───────┴──────┬───────┘   write missing JUnit tests → run in own
-             ▼              ▼              ▼           build dir → triage failures → trace JSON
+   ┌────────────┬────────────┬────────────┬────────────┐
+   │ accounts   │ transfers  │ loans      │ security   │   each subagent:
+   │ subagent   │ subagent   │ subagent   │ subagent   │   locate code → find @Tag'd tests →
+   └─────┬──────┴─────┬──────┴─────┬──────┴─────┬──────┘   write missing JUnit tests → run in own
+         ▼            ▼            ▼            ▼          build dir → triage failures → trace JSON
                              │ Phase 3: one clean full test run
                              │ Phase 4: tools/build_report.py recomputes every status from
-                             │          Surefire XML + @Tag annotations (checks the agents' claims)
+                             │          Surefire XML + @Tag annotations, and checks every file:line
+                             │          the agents cite (checks the agents' claims)
                              ▼
              spectrace-out/matrix.html · matrix.md · metrics.json · release-notes.md
 ```
@@ -58,10 +59,15 @@ AI agents can hallucinate "all covered ✅". SpecTrace doesn't use agent claims 
 annotations in source, compares against the git baseline to tell new tests from old, and **flags any
 requirement where a subagent's claim doesn't match the evidence**.
 
-The checker is itself tested (`python3 -m unittest discover -s tools`): 15 tests cover the cases that
+It also checks every `file:line` a subagent cites: the line must exist and sit inside the method the agent
+named. Stale or invented locations are flagged in the report, so a judge who clicks `TransferService.java:50`
+lands on the bug.
+
+The checker is itself tested (`python3 -m unittest discover -s tools`): 20 tests cover the cases that
 matter, including an agent claiming "covered" while its test fails, tests that are listed but not tagged
-or never run, and Bob's tests being committed before the report is built. CI (`.github/workflows/ci.yml`)
-runs these, the app tests, and a replay that must still produce the expected 12/6/2/2 matrix.
+or never run, wrong `file:line` references, and Bob's tests being committed before the report is built.
+CI (`.github/workflows/ci.yml`) runs these, the app tests, and a replay that must still produce the
+expected 12/10/3/2 matrix with no disagreements.
 
 The diff view in the HTML matrix highlights every requirement whose status changed since the previous
 run, with a "was: X" badge — so incremental re-traces are immediately obvious.
@@ -78,16 +84,24 @@ run, with a "was: X" badge — so incremental re-traces are immediately obvious.
 
 ## Demo target
 
-`bank-app/` is a **Spring Boot 3 / Java 21** core-banking service (Accounts, Transfers, Loans) with a
-realistic spec, `docs/requirements.pdf` (NBK-BRD-2026-014, 22 requirements). Like real codebases,
+`bank-app/` is a **Spring Boot 3 / Java 21** core-banking service (Accounts, Transfers, Loans, Security) with a
+realistic spec, `docs/requirements.pdf` (NBK-BRD-2026-014, 27 requirements). Like real codebases,
 it contains:
 
 | Planted state | Requirements | What SpecTrace should report |
 |---|---|---|
 | Implemented and tested | 12 | ✅ Covered |
-| Implemented, never tested | 6 | 🆕 Tests written, passing |
-| Implemented **wrong** | 2 (TRF-03 daily limit off-by-one, LN-03 instalment truncated instead of rounded) | 🐞 Bug found, with spec vs actual and `file:line` |
+| Implemented, never tested | 10 (incl. SEC-01–04: PIN hashing, tokens, login throttling, audit log) | 🆕 Tests written, passing |
+| Implemented **wrong** (planted) | 2 (TRF-03 daily limit off-by-one, LN-03 instalment truncated instead of rounded) | 🐞 Bug found, with spec vs actual and `file:line` |
+| Implemented **wrong** (not planted) | 1 (SEC-05: any logged-in customer can read, or send money from, anyone's account) | 🐞 Bug found through the real HTTP stack: expected 403, got 200 |
 | Never implemented | 2 (ACC-07 PIN lockout, TRF-07 scheduled transfers) | ⛔ Not implemented |
+
+**About SEC-05.** Nobody planted this one. It came in with the JWT security layer: the filter checks *who*
+the caller is, but no controller checks that the account in the request is theirs. So with Alice's token,
+`GET /api/accounts/{bob}` returns Bob's account, and `POST /api/transfers` with `fromAccount = bob` moves
+Bob's money. This is Broken Object Level Authorization, number one on the OWASP API Security Top 10. Unit tests
+of the services can't see it; SpecTrace's rules make subagents test HTTP-level criteria through the real
+Spring Security stack, which is how it was caught.
 
 `docs/requirements-v2.pdf` changes one requirement (LN-06 fee 1.5% → 2.0%) to demo **incremental
 re-tracing**: only the Loans subagent runs again, and it catches that the code no longer matches the spec.
@@ -112,9 +126,9 @@ The security layer is tested via the existing service tests (using `NoOpPassword
 
 | | Manual | SpecTrace |
 |---|---|---|
-| Build the traceability matrix for 22 requirements | ~11 h (30 min/req estimate) | _measured per run, in `metrics.json`_ |
-| Missing tests | written by hand, often skipped | 15 tagged tests written automatically |
-| Spec-vs-code bugs before release | found in UAT or production | 2 found, with root-cause `file:line` |
+| Build the traceability matrix for 27 requirements | ~13.5 h (30 min/req estimate) | _measured per run, in `metrics.json`_ |
+| Missing tests | written by hand, often skipped | 32 tagged tests written automatically |
+| Spec-vs-code bugs before release | found in UAT, production, or by attackers | 3 found (1 a real security hole), with root-cause `file:line` |
 | Bug fix loop | find → fix → re-test → update spreadsheet | `/fix` → matrix auto-updates |
 | Spec change | redo the spreadsheet | re-trace only changed modules |
 | Audit evidence | a spreadsheet you have to trust | matrix built from actual test results + release-notes.md |
@@ -130,7 +144,7 @@ cd bank-app && ./mvnw test        # baseline: 14 tests, all green
 In Bob:
 ```
 /trace docs/requirements.pdf      # full pipeline
-/fix                              # fix the 2 bugs SpecTrace found
+/fix                              # fix the 3 bugs SpecTrace found
 /trace docs/requirements.pdf      # re-run: matrix goes all-green
 /release-notes v1.0.0             # generate the release report
 ```

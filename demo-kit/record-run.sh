@@ -9,8 +9,9 @@ T=bank-app/src/test/java/com/spectrace/bank
 
 for f in spectrace-out/requirements.json spectrace-out/metrics.json spectrace-out/run.json \
          spectrace-out/trace-accounts.json spectrace-out/trace-transfers.json spectrace-out/trace-loans.json \
+         spectrace-out/trace-security.json \
          "$T/accounts/AccountsRequirementsTest.java" "$T/transfers/TransfersRequirementsTest.java" \
-         "$T/loans/LoansRequirementsTest.java"; do
+         "$T/loans/LoansRequirementsTest.java" "$T/security/SecurityRequirementsTest.java"; do
   [ -f "$f" ] || { echo "missing $f. Run /trace in Bob first." >&2; exit 1; }
 done
 
@@ -35,7 +36,7 @@ fi
 
 cp spectrace-out/requirements.json spectrace-out/trace-*.json "$K/"
 cp "$T/accounts/AccountsRequirementsTest.java" "$T/transfers/TransfersRequirementsTest.java" \
-   "$T/loans/LoansRequirementsTest.java" "$K/tests/"
+   "$T/loans/LoansRequirementsTest.java" "$T/security/SecurityRequirementsTest.java" "$K/tests/"
 cp spectrace-out/matrix.html "$K/expected-matrix.html"
 cp spectrace-out/matrix.md "$K/expected-matrix.md"
 python3 - <<'EOF'

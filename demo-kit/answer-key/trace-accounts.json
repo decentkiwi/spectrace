@@ -8,7 +8,7 @@
         {
           "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
           "symbol": "AccountService#open",
-          "line": 18
+          "line": 27
         }
       ],
       "tests": [
@@ -32,7 +32,7 @@
         {
           "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
           "symbol": "AccountService#nextAccountNumber",
-          "line": 94
+          "line": 110
         }
       ],
       "tests": [
@@ -51,7 +51,7 @@
         {
           "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
           "symbol": "AccountService#deposit",
-          "line": 42
+          "line": 55
         }
       ],
       "tests": [
@@ -70,7 +70,7 @@
         {
           "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
           "symbol": "AccountService#withdraw",
-          "line": 51
+          "line": 68
         }
       ],
       "tests": [
@@ -89,7 +89,7 @@
         {
           "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
           "symbol": "AccountService#close",
-          "line": 67
+          "line": 83
         }
       ],
       "tests": [
@@ -113,7 +113,7 @@
         {
           "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
           "symbol": "AccountService#requireActive",
-          "line": 86
+          "line": 102
         }
       ],
       "tests": [
@@ -132,11 +132,11 @@
         {
           "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
           "symbol": "AccountService#verifyPin",
-          "line": 82
+          "line": 98
         }
       ],
       "tests": [],
-      "notes": "verifyPin() only compares the PIN. No failed-attempt counter or auto-freeze exists. Implement in AccountService#verifyPin with a counter on Account."
+      "notes": "verifyPin() only compares the PIN. No failed-attempt counter or auto-freeze exists. Implement in AccountService#verifyPin (AccountService.java:98) with a counter on Account."
     },
     {
       "id": "REQ-ACC-08",
@@ -145,7 +145,7 @@
         {
           "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
           "symbol": "AccountService#getBalance",
-          "line": 63
+          "line": 77
         }
       ],
       "tests": [

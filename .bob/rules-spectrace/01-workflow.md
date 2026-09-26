@@ -30,7 +30,7 @@ Write `spectrace-out/requirements.json`:
 ```
 Rules: capture **every** `REQ-` ID in the document and nothing else. Copy statements and
 acceptance criteria verbatim, since the numbers in them become test assertions. Tables (such as interest tiers)
-become acceptance criteria, one row each. Module is `accounts` | `transfers` | `loans`.
+become acceptance criteria, one row each. Module is `accounts` | `transfers` | `loans` | `security`.
 Tell the user how many requirements you found per module.
 
 **Incremental mode:** if `requirements.prev.json` exists, compare each requirement's `text` and
@@ -45,7 +45,7 @@ one this self-contained prompt, with the placeholders filled in:
 
 ```
 You are a SpecTrace module tracer. Read .bob/spectrace/tracer-playbook.md and follow it exactly.
-MODULE=<accounts|transfers|loans>
+MODULE=<accounts|transfers|loans|security>
 PACKAGE=com.spectrace.bank.<module>
 REQUIREMENT_IDS=<comma-separated IDs for this module>
 CHANGED_IDS=<IDs changed since last run, or ALL>

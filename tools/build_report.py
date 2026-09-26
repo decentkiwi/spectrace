@@ -119,6 +119,36 @@ def load_surefire(app, build_dir):
     return results
 
 
+DECL_RE = re.compile(r'^\s*(?:@\w+\s+)*(?:(?:public|protected|private|static|final|synchronized|abstract)\s+)*'
+                     r'[\w<>\[\],.?\s]+?\s+(\w+)\s*\([^;]*$')
+NOT_DECL = {"if", "for", "while", "switch", "catch", "return", "new", "throw", "else", "synchronized"}
+
+
+def check_reference(ref):
+    """Is `file:line` a real line inside (or naming) the claimed Class#member? Returns None if OK, else why not."""
+    path, line, symbol = ref.get("file"), ref.get("line"), ref.get("symbol") or ""
+    if not path:
+        return None
+    if not os.path.exists(path):
+        return f"{path} does not exist"
+    with open(path, encoding="utf-8") as f:
+        lines = f.read().split("\n")
+    if not line:
+        return None
+    if not 1 <= line <= len(lines):
+        return f"line {line} is outside {os.path.basename(path)} ({len(lines)} lines)"
+    member = symbol.split("#")[-1] if "#" in symbol else ""
+    if not member or re.search(r"\b" + re.escape(member) + r"\b", lines[line - 1]):
+        return None
+    for i in range(line - 1, -1, -1):
+        m = DECL_RE.match(lines[i])
+        if m and m.group(1) not in NOT_DECL and not lines[i].strip().startswith(("return", "//", "*")):
+            if m.group(1) == member:
+                return None
+            return f"line {line} is inside {m.group(1)}(), not {member}"
+    return f"line {line} is not inside {member}"
+
+
 def load_json(path, default=None):
     if not os.path.exists(path):
         return default
@@ -194,7 +224,7 @@ def build(out, app, baseline_ref, build_dir):
             "status_changed": prev_status is not None and prev_status != status,
             "agent_status": claimed,
             "agent_agrees": claimed in (None, status),
-            "implementation": claim.get("implementation", []),
+            "implementation": [{**ref, "problem": check_reference(ref)} for ref in claim.get("implementation", [])],
             "tests": test_rows,
             "notes": claim.get("notes", ""),
         })
@@ -226,6 +256,8 @@ def build(out, app, baseline_ref, build_dir):
         "bugs_found": counts["FAILING"],
         "gaps_found": counts["NOT_IMPLEMENTED"] + counts["UNTESTED"],
         "agent_disagreements": [r["id"] for r in rows if not r["agent_agrees"]],
+        "bad_references": [f"{r['id']}: {i.get('symbol')} {os.path.basename(i.get('file', ''))}:{i.get('line')} ({i['problem']})"
+                           for r in rows for i in r["implementation"] if i.get("problem")],
         "spectrace_minutes": elapsed_min,
         "timing": timing,
         "recorded_at": run.get("recorded_at"),
@@ -263,7 +295,8 @@ def render_md(rows, metrics):
     lines += ["| Requirement | Status | Implementation | Tests | Notes |",
               "|---|---|---|---|---|"]
     for r in sorted(rows, key=lambda r: r["id"]):
-        impl = "<br>".join(f"`{i.get('symbol') or i.get('file')}`" for i in r["implementation"]) or "-"
+        impl = "<br>".join(f"`{i.get('symbol') or i.get('file')}`" + (f" ⚠ {i['problem']}" if i.get("problem") else "")
+                           for i in r["implementation"]) or "-"
         tests = "<br>".join(f"{'🆕 ' if t['new'] else ''}{t['method']} ({t['result']})" for t in r["tests"]) or "-"
         flag = "" if r["agent_agrees"] else f" ⚠ agent said {r['agent_status']}"
         diff_arrow = f" ↑ was {r['prev_status']}" if r["status_changed"] else ""
@@ -302,7 +335,8 @@ def render_html(rows, metrics, doc_id):
     body = []
     for r in sorted(rows, key=lambda r: (ORDER.index(r["status"]), r["id"])):
         impl = "".join(f"<div><code>{esc(i.get('symbol') or '')}</code> <span class='muted'>"
-                       f"{esc(os.path.basename(i.get('file', '')))}{':' + str(i['line']) if i.get('line') else ''}</span></div>"
+                       f"{esc(os.path.basename(i.get('file', '')))}{':' + str(i['line']) if i.get('line') else ''}</span>"
+                       f"{'<div class=warn>⚠ ' + esc(i['problem']) + '</div>' if i.get('problem') else ''}</div>"
                        for i in r["implementation"]) or "<span class='muted'>none found</span>"
         tests = "".join(
             f"<div class='t {t['result'].lower()}'>{'<b class=new-badge>NEW</b> ' if t['new'] else ''}"
@@ -429,7 +463,7 @@ def main():
     ap.add_argument("--fail-on", default="",
                     help="comma-separated statuses that make the exit code 1, e.g. FAILING,NOT_IMPLEMENTED")
     ap.add_argument("--fail-on-disagreement", action="store_true",
-                    help="exit 1 if any subagent claim contradicts the evidence")
+                    help="exit 1 if any subagent claim contradicts the evidence (status or file:line)")
     args = ap.parse_args()
     fail_on = {s.strip().upper() for s in args.fail_on.split(",") if s.strip()}
     unknown = fail_on - set(STATUSES)
@@ -470,11 +504,14 @@ def main():
     if metrics.get("status_changes"):
         print("status changes since last run:",
               ", ".join(f"{ch['id']} {ch['from']}→{ch['to']}" for ch in metrics["status_changes"]))
+    if metrics["bad_references"]:
+        print("bad file:line references:\n  " + "\n  ".join(metrics["bad_references"]))
     print(f"baseline: {baseline_ref}")
 
     gate = sorted(r["id"] for r in rows if r["status"] in fail_on)
-    if args.fail_on_disagreement and metrics["agent_disagreements"]:
+    if args.fail_on_disagreement:
         gate += [f"{i} (disagreement)" for i in metrics["agent_disagreements"]]
+        gate += [f"{b.split(':')[0]} (bad reference)" for b in metrics["bad_references"]]
     if gate:
         print("GATE FAILED:", ", ".join(gate))
         sys.exit(1)

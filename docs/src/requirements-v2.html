@@ -38,7 +38,7 @@
 </table>
 
 <h2>1. Purpose and scope</h2>
-<p>This document states the functional requirements for the Accounts, Transfers and Loans services of the
+<p>This document states the functional requirements for the Accounts, Transfers, Loans and Security services of the
 Northbridge core banking platform. Every requirement has a unique identifier of the form
 <span class="id">REQ-&lt;MODULE&gt;-&lt;NN&gt;</span>. Each identifier must be traceable to its implementation and to at least one
 automated test before a release is approved (see MAS Technology Risk Management Guidelines, section 9).</p>
@@ -202,7 +202,40 @@ availability, security controls) are out of scope and are covered in NBK-NFR-202
   <tr><td>Acceptance criteria</td><td><ul><li>Approved loans have no rejection reason; rejected loans always have one.</li><li>A decided application can be retrieved by its identifier.</li></ul></td></tr>
 </table></div>
 
-<h2>6. Change control</h2>
+<h2>6. Security</h2>
+<p>These requirements apply to the customer-facing API. They supplement NBK-SEC-2025-021 (Authentication standard).</p>
+
+<div class="req"><h3><span class="id">REQ-SEC-01</span> PIN protection</h3>
+<table>
+  <tr><td>Requirement</td><td>Customer PINs are stored only as a salted one-way hash, never in plain text, and are never returned by the API.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>The stored PIN value for an account is not the plain-text PIN.</li><li>The correct PIN verifies successfully; an incorrect PIN does not.</li><li>Account data returned by the API contains no PIN or PIN hash field.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-SEC-02</span> Session tokens</h3>
+<table>
+  <tr><td>Requirement</td><td>A successful login issues a signed session token that identifies the customer's account and expires 60 minutes after it is issued.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>A freshly issued token is accepted and identifies the account it was issued for.</li><li>A token whose content or signature has been altered is rejected.</li><li>An expired token is rejected.</li><li>The token lifetime is 60 minutes.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-SEC-03</span> Login throttling</h3>
+<table>
+  <tr><td>Requirement</td><td>After 5 failed login attempts for an account within 15 minutes, further login attempts for that account are refused until the window has passed. This temporary throttle is separate from the permanent freeze in REQ-ACC-07.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>After 5 failed attempts, the next attempt for that account is refused, even with the correct PIN.</li><li>4 failed attempts do not block the account.</li><li>A successful login resets the failed-attempt count.</li><li>Failed attempts on one account do not affect other accounts.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-SEC-04</span> Audit trail</h3>
+<table>
+  <tr><td>Requirement</td><td>Security-relevant events are recorded in an append-only audit log with a timestamp, the account number and the event type.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>Successful and failed logins are recorded.</li><li>Deposits, withdrawals (including rejected withdrawals) and completed transfers are recorded.</li><li>Account freezes and closures are recorded.</li><li>Audit entries cannot be modified or removed through the audit log's interface.</li></ul></td></tr>
+</table></div>
+
+<div class="req"><h3><span class="id">REQ-SEC-05</span> Account ownership</h3>
+<table>
+  <tr><td>Requirement</td><td>A logged-in customer may only act on their own account. Viewing account details or balance, withdrawing, closing, viewing transfer history and sending a transfer from an account are only allowed for the customer logged in to that account.</td></tr>
+  <tr><td>Acceptance criteria</td><td><ul><li>A customer requesting another customer's account details is refused with HTTP 403.</li><li>A customer attempting a transfer from another customer's account is refused with HTTP 403, and no money moves.</li><li>A customer can view their own account details.</li><li>Requests without a valid session token are refused.</li></ul></td></tr>
+</table></div>
+
+<h2>7. Change control</h2>
 <table><tr><th>Version</th><th>Change</th></tr><tr><td>1.1</td><td>REQ-LN-06: early repayment fee raised from 1.5% to 2.0% (Pricing Committee, 18 Sep 2026).</td></tr></table>
 <p class="note">Changes to this document need Product Office approval. Engineering must re-establish traceability for
 every changed requirement before the next release.</p>

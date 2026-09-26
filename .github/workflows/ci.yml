@@ -38,10 +38,12 @@ jobs:
           c = m["status_counts"]
           got = (c["COVERED"], c["NEW_TEST_PASS"], c["FAILING"], c["NOT_IMPLEMENTED"])
           problems = []
-          if got != (12, 6, 2, 2):
-              problems.append(f"expected covered/new/bug/missing = 12/6/2/2, got {got}")
+          if got != (12, 10, 3, 2):
+              problems.append(f"expected covered/new/bug/missing = 12/10/3/2, got {got}")
           if m["agent_disagreements"]:
               problems.append(f"agent disagreements: {m['agent_disagreements']}")
+          if m["bad_references"]:
+              problems.append(f"stale file:line references: {m['bad_references']}")
           if problems:
               sys.exit("; ".join(problems))
           print("demo matrix OK:", got)

@@ -8,7 +8,7 @@
         {
           "file": "bank-app/src/main/java/com/spectrace/bank/loans/LoanService.java",
           "symbol": "LoanService#evaluate",
-          "line": 72
+          "line": 69
         }
       ],
       "tests": [
@@ -27,7 +27,7 @@
         {
           "file": "bank-app/src/main/java/com/spectrace/bank/loans/LoanService.java",
           "symbol": "LoanService#evaluate",
-          "line": 77
+          "line": 73
         }
       ],
       "tests": [
@@ -70,7 +70,7 @@
         {
           "file": "bank-app/src/main/java/com/spectrace/bank/loans/LoanService.java",
           "symbol": "LoanService#evaluate",
-          "line": 82
+          "line": 79
         }
       ],
       "tests": [
@@ -94,7 +94,7 @@
         {
           "file": "bank-app/src/main/java/com/spectrace/bank/loans/LoanService.java",
           "symbol": "LoanService#interestRateFor",
-          "line": 46
+          "line": 45
         }
       ],
       "tests": [

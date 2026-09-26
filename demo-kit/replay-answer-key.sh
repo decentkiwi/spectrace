@@ -10,6 +10,8 @@ T=bank-app/src/test/java/com/spectrace/bank
 cp "$K/tests/AccountsRequirementsTest.java" "$T/accounts/"
 cp "$K/tests/TransfersRequirementsTest.java" "$T/transfers/"
 cp "$K/tests/LoansRequirementsTest.java" "$T/loans/"
+mkdir -p "$T/security"
+cp "$K/tests/SecurityRequirementsTest.java" "$T/security/"
 cp "$K"/requirements.json "$K"/trace-*.json spectrace-out/
 if [ -f "$K/run.json" ]; then
   cp "$K/run.json" spectrace-out/run.json
