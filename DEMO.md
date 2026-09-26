@@ -7,6 +7,9 @@
 3. Enable auto-approve for reads, writes to allowed files, and `./mvnw` / `python3` commands. Leave subagent-spawn approval on if you want the audience to see the fan-out.
 4. Warm the Maven cache: `cd bank-app && ./mvnw -q test`.
 5. Have `docs/requirements.pdf` open in a tab.
+6. After your first clean rehearsal run in Bob, run `demo-kit/record-run.sh`. The fallback then replays
+   **real Bob output with its measured time**. Until you do, the fallback matrix says "timing not measured"
+   (it replays hand-written reference files and won't invent a number).
 
 ## Script
 
@@ -38,7 +41,7 @@ Compare with `demo-kit/answer-key/expected-matrix.html`.
 
 ## If the live run goes wrong
 
-- **Run stalls or overruns** → `demo-kit/run-demo.sh` produces the same matrix in one command, and opens it automatically. A pre-recorded video is your ultimate backup.
+- **Run stalls or overruns** → `demo-kit/run-demo.sh` produces the same matrix in one command, and opens it automatically. Say it's a replay of an earlier run. A pre-recorded video is your ultimate backup.
 - **A bug shows up as "Newly tested"** → a subagent weakened an assertion. Run `git diff` on the `*RequirementsTest` files and re-run that module in 🔎 SpecTrace Tracer mode.
 - **`/fix` doesn't flip the status** → the fixer made a fix but the test still fails. Ask Bob in Agent mode to show the diff and check the assertion.
 

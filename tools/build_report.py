@@ -7,7 +7,12 @@ produces the traceability matrix. Statuses are recomputed from evidence, never
 taken from the agents on trust; disagreements are flagged in the report.
 
 Usage (from repo root):
-    python3 tools/build_report.py [--out spectrace-out] [--app bank-app] [--baseline-ref HEAD]
+    python3 tools/build_report.py [--out spectrace-out] [--app bank-app] [--baseline-ref REF]
+                                  [--fail-on FAILING,NOT_IMPLEMENTED] [--fail-on-disagreement]
+
+The baseline (used to tell Bob's new tests from pre-existing ones) defaults to the git tag
+`spectrace-baseline`, falling back to HEAD. Pin the tag before a run so that committing
+Bob's tests later can't make them look pre-existing.
 """
 import argparse
 import glob
@@ -64,6 +69,18 @@ def scan_test_tree(app):
             for req, tests in scan_tags(f.read()).items():
                 result.setdefault(req, []).extend(tests)
     return result
+
+
+BASELINE_TAG = "spectrace-baseline"
+
+
+def resolve_baseline(app, requested):
+    """Explicit ref wins; otherwise the spectrace-baseline tag if it exists; otherwise HEAD."""
+    if requested:
+        return requested
+    probe = subprocess.run(["git", "rev-parse", "--verify", "-q", f"refs/tags/{BASELINE_TAG}"],
+                           cwd=app, capture_output=True, text=True)
+    return BASELINE_TAG if probe.returncode == 0 else "HEAD"
 
 
 def scan_baseline(app, ref):
@@ -185,10 +202,16 @@ def build(out, app, baseline_ref, build_dir):
     counts = {s: sum(1 for r in rows if r["status"] == s) for s in STATUSES}
     run = load_json(os.path.join(out, "run.json"), {})
     started = run.get("started_at")
-    elapsed_min = None
-    if started:
+    elapsed_min, timing = None, "none"
+    if run.get("elapsed_minutes") is not None:
+        # A real Bob run captured by demo-kit/record-run.sh and replayed later
+        elapsed_min, timing = run["elapsed_minutes"], "recorded"
+    elif run.get("mode") == "replay":
+        timing = "replay"
+    elif started:
         t0 = datetime.fromisoformat(started.replace("Z", "+00:00"))
         elapsed_min = round((datetime.now(timezone.utc) - t0).total_seconds() / 60, 1)
+        timing = "live"
     manual_min_per_req = run.get("manual_minutes_per_requirement", 30)
     manual_total_min = manual_min_per_req * len(rows)
     saved_min = (manual_total_min - elapsed_min) if elapsed_min is not None else None
@@ -204,6 +227,9 @@ def build(out, app, baseline_ref, build_dir):
         "gaps_found": counts["NOT_IMPLEMENTED"] + counts["UNTESTED"],
         "agent_disagreements": [r["id"] for r in rows if not r["agent_agrees"]],
         "spectrace_minutes": elapsed_min,
+        "timing": timing,
+        "recorded_at": run.get("recorded_at"),
+        "baseline_ref": baseline_ref,
         "manual_estimate_minutes": manual_total_min,
         "time_saved_minutes": saved_min,
         "manual_estimate_basis": f"{manual_min_per_req} min per requirement to locate code, find tests, "
@@ -296,13 +322,18 @@ def render_html(rows, metrics, doc_id):
 
     # Time-saved banner
     speed_html = ""
-    if metrics["spectrace_minutes"] is not None:
+    if metrics.get("timing") == "replay":
+        speed_html = ("<div class='speed-banner'><div class='speed-item'><span class='speed-lbl'>Timing</span>"
+                      "<span class='speed-val'>Not measured</span></div><div class='muted'>Replayed from the "
+                      "answer key, not a live Bob run. Record a real run with demo-kit/record-run.sh to show "
+                      "measured timing here.</div></div>")
+    elif metrics["spectrace_minutes"] is not None:
         manual_h = metrics["manual_estimate_minutes"] // 60
         manual_m = metrics["manual_estimate_minutes"] % 60
         st_min = metrics["spectrace_minutes"]
         saved_display = saved_str or ""
         speed_html = f"""<div class="speed-banner">
-  <div class="speed-item"><span class="speed-lbl">SpecTrace</span><span class="speed-val">{st_min} min</span></div>
+  <div class="speed-item"><span class="speed-lbl">SpecTrace{" (recorded run)" if metrics.get("timing") == "recorded" else ""}</span><span class="speed-val">{st_min} min</span></div>
   <div class="speed-sep">vs</div>
   <div class="speed-item"><span class="speed-lbl">Manual estimate</span><span class="speed-val">~{manual_h} h {manual_m} min</span></div>
   {"" if not saved_display else f'<div class="speed-saved">{esc(saved_display)}</div>'}
@@ -393,10 +424,20 @@ def main():
     ap.add_argument("--out", default="spectrace-out")
     ap.add_argument("--app", default="bank-app")
     ap.add_argument("--build-dir", default="target")
-    ap.add_argument("--baseline-ref", default="HEAD")
+    ap.add_argument("--baseline-ref", default=None,
+                    help=f"git ref of the pre-SpecTrace test suite (default: tag {BASELINE_TAG}, else HEAD)")
+    ap.add_argument("--fail-on", default="",
+                    help="comma-separated statuses that make the exit code 1, e.g. FAILING,NOT_IMPLEMENTED")
+    ap.add_argument("--fail-on-disagreement", action="store_true",
+                    help="exit 1 if any subagent claim contradicts the evidence")
     args = ap.parse_args()
+    fail_on = {s.strip().upper() for s in args.fail_on.split(",") if s.strip()}
+    unknown = fail_on - set(STATUSES)
+    if unknown:
+        sys.exit(f"--fail-on: unknown status {', '.join(sorted(unknown))}; choose from {', '.join(STATUSES)}")
 
-    rows, metrics, doc_id = build(args.out, args.app, args.baseline_ref, args.build_dir)
+    baseline_ref = resolve_baseline(args.app, args.baseline_ref)
+    rows, metrics, doc_id = build(args.out, args.app, baseline_ref, args.build_dir)
 
     # Snapshot current rows for next diff run before overwriting
     matrix_prev_path = os.path.join(args.out, "matrix-prev.json")
@@ -429,6 +470,14 @@ def main():
     if metrics.get("status_changes"):
         print("status changes since last run:",
               ", ".join(f"{ch['id']} {ch['from']}→{ch['to']}" for ch in metrics["status_changes"]))
+    print(f"baseline: {baseline_ref}")
+
+    gate = sorted(r["id"] for r in rows if r["status"] in fail_on)
+    if args.fail_on_disagreement and metrics["agent_disagreements"]:
+        gate += [f"{i} (disagreement)" for i in metrics["agent_disagreements"]]
+    if gate:
+        print("GATE FAILED:", ", ".join(gate))
+        sys.exit(1)
 
 
 if __name__ == "__main__":

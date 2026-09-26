@@ -10,6 +10,10 @@ Run `date -u +%Y-%m-%dT%H:%M:%SZ` and write `spectrace-out/run.json`:
 { "started_at": "<timestamp>", "spec": "<path to the document>", "manual_minutes_per_requirement": 30 }
 ```
 
+Then pin the test baseline, so tests you write can never be mistaken for pre-existing ones:
+`git rev-parse -q --verify refs/tags/spectrace-baseline || git tag spectrace-baseline`
+(Only create the tag if it is missing. Never move or delete it.)
+
 ## Phase 1: Extract requirements (document understanding)
 Read the requirements document the user named (default `docs/requirements.pdf`).
 If `spectrace-out/requirements.json` already exists, first copy it to `spectrace-out/requirements.prev.json`.

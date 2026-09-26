@@ -58,6 +58,11 @@ AI agents can hallucinate "all covered ✅". SpecTrace doesn't use agent claims 
 annotations in source, compares against the git baseline to tell new tests from old, and **flags any
 requirement where a subagent's claim doesn't match the evidence**.
 
+The checker is itself tested (`python3 -m unittest discover -s tools`): 15 tests cover the cases that
+matter, including an agent claiming "covered" while its test fails, tests that are listed but not tagged
+or never run, and Bob's tests being committed before the report is built. CI (`.github/workflows/ci.yml`)
+runs these, the app tests, and a replay that must still produce the expected 12/6/2/2 matrix.
+
 The diff view in the HTML matrix highlights every requirement whose status changed since the previous
 run, with a "was: X" badge — so incremental re-traces are immediately obvious.
 
@@ -133,4 +138,14 @@ In Bob:
 Then open `spectrace-out/matrix.html` and `spectrace-out/release-notes.md`.
 
 To try the tooling without Bob: `demo-kit/run-demo.sh`.
-To reset to the pre-demo baseline: `demo-kit/reset.sh`.
+To reset to the pre-demo baseline: `demo-kit/reset.sh` (uncommitted `bank-app/src` edits are stashed, not lost).
+After a good live run: `demo-kit/record-run.sh` saves it as the answer key, so the fallback replays real Bob output.
+
+### Use it as a release gate
+`build_report.py` can fail a pipeline:
+
+```bash
+python3 tools/build_report.py --fail-on FAILING,NOT_IMPLEMENTED --fail-on-disagreement
+```
+
+The exit code is 1 if any requirement has one of those statuses, or if a subagent's claim contradicts the evidence.
