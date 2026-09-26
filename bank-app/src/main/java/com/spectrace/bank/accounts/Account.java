@@ -2,6 +2,8 @@ package com.spectrace.bank.accounts;
 
 import java.math.BigDecimal;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 public class Account {
@@ -38,11 +40,13 @@ public class Account {
         return status;
     }
 
-    /** Checks a raw PIN candidate against the stored BCrypt hash. */
-    boolean pinMatches(String candidate) {
-        // BCryptPasswordEncoder.matches is called from AccountService
-        // which holds the PasswordEncoder bean; the raw hash is stored here.
-        return org.springframework.security.crypto.bcrypt.BCrypt.checkpw(candidate, pinHash);
+    /**
+     * Checks a raw PIN candidate against the stored hash using the supplied encoder.
+     * Keeping the encoder out of Account makes tests that use NoOpPasswordEncoder work
+     * without BCrypt, since NoOpPasswordEncoder stores the PIN as plain text.
+     */
+    boolean pinMatches(String candidate, PasswordEncoder encoder) {
+        return encoder.matches(candidate, pinHash);
     }
 
     void setBalance(BigDecimal balance) {

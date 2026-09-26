@@ -101,7 +101,7 @@ The banking API is production-ready secured:
 | Audit log | `AuditService` records every login, transfer, deposit, withdrawal, freeze and closure |
 | Error responses | Validation errors return field-level detail; business errors return `422 Unprocessable Entity` |
 
-All security requirements are fully traceable: `/trace` will find and verify them just like business requirements.
+The security layer is tested via the existing service tests (using `NoOpPasswordEncoder` for speed). Adding `REQ-SEC-*` requirements to the spec document and running `/trace` would trace them exactly like the business requirements above.
 
 ## Impact
 

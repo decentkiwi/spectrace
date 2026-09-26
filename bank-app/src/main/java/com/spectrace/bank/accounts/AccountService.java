@@ -96,7 +96,7 @@ public class AccountService {
     }
 
     public boolean verifyPin(String accountNumber, String pin) {
-        return get(accountNumber).pinMatches(pin);
+        return get(accountNumber).pinMatches(pin, passwordEncoder);
     }
 
     Account requireActive(String accountNumber) {

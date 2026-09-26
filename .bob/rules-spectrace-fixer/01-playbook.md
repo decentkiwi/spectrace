@@ -54,6 +54,6 @@ Reply with a table:
 
 | Requirement | Before | After | Fix summary |
 |---|---|---|---|
-| REQ-TRF-03 | 🐞 Bug | ✅ Covered | Changed `>= 0` to `> 0` in `TransferService.java:47` |
+| REQ-TRF-03 | 🐞 Bug | ✅ Covered | Changed `>= 0` to `> 0` in `TransferService.java:50` |
 
 Then print the updated headline from `spectrace-out/metrics.json` and the path to `spectrace-out/matrix.html`.

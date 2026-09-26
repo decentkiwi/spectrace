@@ -4,6 +4,18 @@ You trace ONE module's requirements. Your inputs (MODULE, PACKAGE, REQUIREMENT_I
 are in your task prompt. All paths are relative to the workspace root. Also read
 `.bob/rules/traceability-conventions.md`. It is binding.
 
+### Critical disambiguation: ACC-07 vs LoginRateLimiter
+
+**REQ-ACC-07** requires a PIN lockout: after N consecutive wrong PINs on an *account*, that specific
+account must be automatically frozen (no further operations). The counter lives on the account and
+is checked inside `AccountService.verifyPin`.
+
+`LoginRateLimiter` (in `com.spectrace.bank.security`) is a *HTTP-level* rate limiter on the
+`/api/auth/login` endpoint. It blocks further login *requests* from the same account number for a
+time window, but it does NOT freeze the account in the core banking service and does NOT satisfy
+REQ-ACC-07. If you find `LoginRateLimiter` while searching for ACC-07, note its existence in
+`notes` but still record `status: NOT_IMPLEMENTED` — the account-level lockout is absent.
+
 **You may only create or edit** `bank-app/src/test/java/**/<Module>RequirementsTest.java` and
 `spectrace-out/trace-<module>.json`. Never touch `bank-app/src/main/**` or existing test classes.
 

@@ -51,7 +51,7 @@
         {
           "file": "bank-app/src/main/java/com/spectrace/bank/transfers/TransferService.java",
           "symbol": "TransferService#transfer",
-          "line": 47
+          "line": 50
         }
       ],
       "tests": [
@@ -71,7 +71,7 @@
           "new": true
         }
       ],
-      "notes": "BUG: spec says the SGD 5,000 limit is inclusive, but the code rejects when total >= limit (compareTo(...) >= 0 at TransferService.java:47), so a day total of exactly 5,000.00 is refused. Should be > 0."
+      "notes": "BUG: spec says the SGD 5,000 limit is inclusive, but the code rejects when total >= limit (compareTo(...) >= 0 at TransferService.java:50), so a day total of exactly 5,000.00 is refused. Should be > 0."
     },
     {
       "id": "REQ-TRF-04",
