@@ -34,7 +34,7 @@ Compare with `demo-kit/answer-key/expected-matrix.html`.
 - **Bug (2):** TRF-03 (`TransferService.java:50`, `>= 0` should be `> 0`); LN-03 (`LoanService.java:60`, `RoundingMode.DOWN` should be `HALF_UP`: 754.89 vs 754.90)
 - **Not implemented (2):** ACC-07 PIN lockout, TRF-07 scheduled transfers
 - **v2 re-run:** LN-06 becomes a bug (fee 246.91 expected, code gives 185.19); only the loans subagent runs; changed row is highlighted with "was: Newly tested" diff badge.
-- **After `/fix`:** TRF-03 and LN-03 flip from Bug → Covered; time-saved banner updates.
+- **After `/fix`:** TRF-03 and LN-03 flip from Bug → Newly tested (their tests are new this run), each with a "was: Bug found" badge; time-saved banner updates.
 
 ## If the live run goes wrong
 

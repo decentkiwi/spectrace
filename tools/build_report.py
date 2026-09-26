@@ -126,10 +126,10 @@ def build(out, app, baseline_ref, build_dir):
     baseline = scan_baseline(app, baseline_ref)
     surefire = load_surefire(app, build_dir)
 
-    # Load previous run's statuses for diff view
+    # Load previous run's statuses for diff view. main() rotates matrix-curr.json to
+    # matrix-prev.json only after build() returns, so matrix-curr.json is still the last run here.
     prev_statuses = {}
-    prev_reqs = load_json(os.path.join(out, "requirements.prev.json"))
-    prev_matrix = load_json(os.path.join(out, "matrix-prev.json"))
+    prev_matrix = load_json(os.path.join(out, "matrix-curr.json"))
     if prev_matrix:
         for entry in prev_matrix.get("rows", []):
             prev_statuses[entry["id"]] = entry["status"]

@@ -43,6 +43,11 @@ For any test that still fails after your fix:
 
 ## Step 5: Rebuild the evidence report
 
+First, for each requirement you fixed, update its entry in `spectrace-out/trace-<module>.json`:
+set `status` to `NEW_TEST_PASS` (or `COVERED` if its tests existed before this run) and append
+` Fixed by SpecTrace Fixer: <one-line fix summary>.` to `notes`. Otherwise the report flags a
+stale agent claim of `FAILING` against the now-passing evidence.
+
 From the workspace root: `python3 tools/build_report.py`
 
 Verify that every requirement you fixed now shows `COVERED` or `NEW_TEST_PASS` in the output.
@@ -54,6 +59,6 @@ Reply with a table:
 
 | Requirement | Before | After | Fix summary |
 |---|---|---|---|
-| REQ-TRF-03 | 🐞 Bug | ✅ Covered | Changed `>= 0` to `> 0` in `TransferService.java:50` |
+| REQ-TRF-03 | 🐞 Bug | 🆕 Newly tested | Changed `>= 0` to `> 0` in `TransferService.java:50` |
 
 Then print the updated headline from `spectrace-out/metrics.json` and the path to `spectrace-out/matrix.html`.
