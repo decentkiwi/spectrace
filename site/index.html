@@ -237,12 +237,12 @@ footer { max-width: 1080px; margin: 0 auto; padding-top: 40px; border-top: 1px s
     <header>
       <span class="eyebrow">Results on the sample bank app</span>
       <h2 id="results-h">27 requirements in, three real bugs out.</h2>
-      <p class="lede">The demo target is a Spring Boot banking API with accounts, transfers, loans and a JWT security layer. Figures below are from the reference run.</p>
+      <p class="lede">The demo target is a Spring Boot banking API with accounts, transfers, loans and a JWT security layer. Figures below are from a live Bob run: four parallel subagents, 39 tests written, 26.2 minutes end to end.</p>
     </header>
     <div class="tally">
       <div><b>27</b><span>requirements traced</span></div>
-      <div class="covered"><b>12</b><span>already covered</span></div>
-      <div class="new"><b>10</b><span>newly tested, passing</span></div>
+      <div class="covered"><b>11</b><span>already covered</span></div>
+      <div class="new"><b>11</b><span>newly tested, passing</span></div>
       <div class="bug"><b>3</b><span>bugs found</span></div>
       <div class="missing"><b>2</b><span>never implemented</span></div>
     </div>
@@ -271,7 +271,7 @@ footer { max-width: 1080px; margin: 0 auto; padding-top: 40px; border-top: 1px s
         </tbody>
       </table>
     </div>
-    <p class="note">Two of the bugs were planted for the demo. The ownership bug came in with our own login code, and SpecTrace caught it by testing the rule through the real HTTP and Spring Security stack. It is Broken Object Level Authorization, number one on the OWASP API Security Top 10. <a href="matrix.html">See every requirement in the full dashboard.</a></p>
+    <p class="note">Two of the bugs were planted for the demo. The ownership bug came in with our own login code, and SpecTrace caught it by testing the rule through the real HTTP and Spring Security stack. It is Broken Object Level Authorization, number one on the OWASP API Security Top 10. Bob also found a gap in a requirement that looked covered: no existing test checked that a SGD 0.00 opening deposit is allowed, so it wrote one. <a href="matrix.html">See every requirement in the full dashboard.</a></p>
   </section>
 
   <section class="section" id="trust" aria-labelledby="trust-h">
@@ -312,8 +312,8 @@ footer { max-width: 1080px; margin: 0 auto; padding-top: 40px; border-top: 1px s
         <table style="min-width:0">
           <thead><tr><th></th><th>By hand</th><th>SpecTrace</th></tr></thead>
           <tbody>
-            <tr><td>Trace 27 requirements</td><td>~13.5 h (estimate)</td><td>One command; time measured per run</td></tr>
-            <tr><td>Missing tests</td><td>Often skipped</td><td>32 tagged tests written</td></tr>
+            <tr><td>Trace 27 requirements</td><td>~13.5 h (estimate)</td><td><b>26.2 min</b>, measured on a live Bob run</td></tr>
+            <tr><td>Missing tests</td><td>Often skipped</td><td>39 tagged tests written</td></tr>
             <tr><td>Bugs before release</td><td>Found in UAT, or by attackers</td><td>3 found, with <code>file:line</code></td></tr>
             <tr><td>Spec change</td><td>Redo the spreadsheet</td><td>Re-check changed modules only</td></tr>
             <tr><td>Audit evidence</td><td>A spreadsheet you trust</td><td>Built from real test results</td></tr>

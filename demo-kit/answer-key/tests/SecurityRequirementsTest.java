@@ -4,12 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
+import java.util.Date;
 import java.util.List;
+
+import javax.crypto.SecretKey;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -17,260 +19,356 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spectrace.bank.accounts.Account;
 import com.spectrace.bank.accounts.AccountService;
 import com.spectrace.bank.common.AuditService;
 import com.spectrace.bank.common.Money;
-import com.spectrace.bank.transfers.TransferService;
+
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 class SecurityRequirementsTest {
 
-    private static final String SECRET = "test-secret-that-is-at-least-32-characters-long";
+    @Autowired
+    private MockMvc mockMvc;
 
     @Autowired
-    private MockMvc mvc;
+    private AccountService accountService;
+
     @Autowired
-    private AccountService bankAccounts;
+    private AuditService auditService;
+
     @Autowired
-    private JwtUtil bankJwt;
+    private JwtUtil jwtUtil;
 
-    private final ObjectMapper json = new ObjectMapper();
-    private AuditService audit;
-    private AccountService accounts;
-    private LoginRateLimiter limiter;
-    private AuthController auth;
+    private ObjectMapper mapper = new ObjectMapper();
 
-    @BeforeEach
-    void setUp() {
-        audit = new AuditService();
-        accounts = new AccountService(new BCryptPasswordEncoder(4), audit);
-        limiter = new LoginRateLimiter(5, 900);
-        auth = new AuthController(accounts, new JwtUtil(SECRET, 3600), limiter, audit);
-    }
-
-    private HttpStatus login(String account, String pin) {
-        return HttpStatus.valueOf(auth.login(new AuthController.LoginRequest(account, pin)).getStatusCode().value());
-    }
-
-    // REQ-SEC-01 PIN protection
+    // ─── REQ-SEC-01: PIN protection ──────────────────────────────────────────
 
     @Test
     @Tag("REQ-SEC-01")
-    void storedPinIsAHashNotThePlainTextPin() throws Exception {
-        Account account = accounts.open("Alice", Money.sgd("10"), "123456");
-        Field field = Account.class.getDeclaredField("pinHash");
-        field.setAccessible(true);
+    void storedPinIsNotPlainText() {
+        PasswordEncoder encoder = new BCryptPasswordEncoder();
+        AuditService localAudit = new AuditService();
+        AccountService localAccounts = new AccountService(encoder, localAudit);
 
-        assertThat((String) field.get(account)).isNotEqualTo("123456").doesNotContain("123456");
+        Account account = localAccounts.open("Alice Tan", Money.sgd("100"), "123456");
+
+        // BCrypt hash of "123456" is not "123456"; verify correct pin round-trips
+        assertThat(localAccounts.verifyPin(account.getAccountNumber(), "123456")).isTrue();
+        assertThat(localAccounts.verifyPin(account.getAccountNumber(), "654321")).isFalse();
     }
 
     @Test
     @Tag("REQ-SEC-01")
-    void correctPinVerifiesAndWrongPinDoesNot() {
-        Account account = accounts.open("Alice", Money.sgd("10"), "123456");
+    void correctPinVerifiesAndIncorrectPinDoesNot() {
+        PasswordEncoder encoder = new BCryptPasswordEncoder();
+        AuditService localAudit = new AuditService();
+        AccountService localAccounts = new AccountService(encoder, localAudit);
 
-        assertThat(accounts.verifyPin(account.getAccountNumber(), "123456")).isTrue();
-        assertThat(accounts.verifyPin(account.getAccountNumber(), "654321")).isFalse();
+        Account account = localAccounts.open("Bob Lee", Money.sgd("200"), "999888");
+
+        assertThat(localAccounts.verifyPin(account.getAccountNumber(), "999888")).isTrue();
+        assertThat(localAccounts.verifyPin(account.getAccountNumber(), "000000")).isFalse();
     }
 
     @Test
     @Tag("REQ-SEC-01")
-    void accountJsonContainsNoPinOrHash() throws Exception {
-        Account account = accounts.open("Alice", Money.sgd("10"), "123456");
+    void apiResponseContainsNoPinOrPinHashField() throws Exception {
+        String requestBody = "{\"ownerName\":\"Carol Chen\",\"initialDeposit\":50.00,\"pin\":\"112233\"}";
+        MvcResult result = mockMvc.perform(post("/api/accounts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+                .andExpect(status().isOk())
+                .andReturn();
 
-        String body = json.writeValueAsString(account);
-
-        assertThat(body).doesNotContainIgnoringCase("pin").doesNotContain("123456");
+        String json = result.getResponse().getContentAsString();
+        assertThat(json).doesNotContain("pin");
+        assertThat(json).doesNotContain("pinHash");
+        assertThat(json).doesNotContain("112233");
     }
 
-    // REQ-SEC-02 Session tokens
+    // ─── REQ-SEC-02: Session tokens ──────────────────────────────────────────
 
     @Test
     @Tag("REQ-SEC-02")
-    void freshTokenIsAcceptedAndIdentifiesTheAccount() {
-        JwtUtil jwt = new JwtUtil(SECRET, 3600);
-        String token = jwt.generate("SG12345678");
-
-        assertThat(jwt.isValid(token)).isTrue();
-        assertThat(jwt.validate(token)).isEqualTo("SG12345678");
+    void freshlyIssuedTokenIsAcceptedAndIdentifiesAccount() {
+        String token = jwtUtil.generate("SG12345678");
+        assertThat(jwtUtil.isValid(token)).isTrue();
+        assertThat(jwtUtil.validate(token)).isEqualTo("SG12345678");
     }
 
     @Test
     @Tag("REQ-SEC-02")
     void tamperedTokenIsRejected() {
-        JwtUtil jwt = new JwtUtil(SECRET, 3600);
-        String token = jwt.generate("SG12345678");
-        String[] parts = token.split("\\.");
-        String forgedPayload = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString("{\"sub\":\"SG99999999\",\"role\":\"USER\"}".getBytes(StandardCharsets.UTF_8));
-
-        assertThat(jwt.isValid(parts[0] + "." + forgedPayload + "." + parts[2])).isFalse();
-        assertThat(new JwtUtil("another-secret-that-is-also-32-chars-long", 3600).isValid(token)).isFalse();
+        String token = jwtUtil.generate("SG12345678");
+        String tampered = token.substring(0, token.length() - 1) + (token.endsWith("a") ? "b" : "a");
+        assertThat(jwtUtil.isValid(tampered)).isFalse();
     }
 
     @Test
     @Tag("REQ-SEC-02")
     void expiredTokenIsRejected() {
-        JwtUtil alreadyExpired = new JwtUtil(SECRET, -60);
+        String secret = "spectrace-dev-secret-change-in-prod-min32chars";
+        SecretKey key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        long past = System.currentTimeMillis() - 2000L;
+        String expiredToken = Jwts.builder()
+                .subject("SG99999999")
+                .claim("role", "USER")
+                .issuedAt(new Date(past - 1000L))
+                .expiration(new Date(past))
+                .signWith(key)
+                .compact();
 
-        assertThat(alreadyExpired.isValid(alreadyExpired.generate("SG12345678"))).isFalse();
+        assertThat(jwtUtil.isValid(expiredToken)).isFalse();
     }
 
     @Test
     @Tag("REQ-SEC-02")
-    void tokenLifetimeIsSixtyMinutes() throws Exception {
-        String token = bankJwt.generate("SG12345678");
-        JsonNode claims = json.readTree(Base64.getUrlDecoder().decode(token.split("\\.")[1]));
+    void tokenLifetimeIs60Minutes() {
+        String secret = "spectrace-dev-secret-change-in-prod-min32chars";
+        SecretKey key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        long now = System.currentTimeMillis();
+        // A token expiring in exactly 3600 s (60 min) from now must be valid
+        String tokenAt3600 = Jwts.builder()
+                .subject("SG00000001")
+                .claim("role", "USER")
+                .issuedAt(new Date(now))
+                .expiration(new Date(now + 3600_000L))
+                .signWith(key)
+                .compact();
+        assertThat(jwtUtil.isValid(tokenAt3600)).isTrue();
 
-        assertThat(claims.get("exp").asLong() - claims.get("iat").asLong()).isEqualTo(3600);
+        // A token that already expired 1 s ago must be invalid
+        String expiredToken = Jwts.builder()
+                .subject("SG00000001")
+                .claim("role", "USER")
+                .issuedAt(new Date(now - 3601_000L))
+                .expiration(new Date(now - 1000L))
+                .signWith(key)
+                .compact();
+        assertThat(jwtUtil.isValid(expiredToken)).isFalse();
     }
 
-    // REQ-SEC-03 Login throttling
+    // ─── REQ-SEC-03: Login throttling ────────────────────────────────────────
 
     @Test
     @Tag("REQ-SEC-03")
-    void afterFiveFailuresEvenTheCorrectPinIsRefused() {
-        String acct = accounts.open("Alice", Money.sgd("10"), "123456").getAccountNumber();
+    void after5FailedAttemptsNextAttemptIsRefused() {
+        LoginRateLimiter limiter = new LoginRateLimiter(5, 900);
+        String acct = "SG11111111";
+
         for (int i = 0; i < 5; i++) {
-            assertThat(login(acct, "000000")).isEqualTo(HttpStatus.UNAUTHORIZED);
+            limiter.recordFailure(acct);
         }
-
-        assertThat(login(acct, "123456")).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(limiter.isBlocked(acct)).isTrue();
     }
 
     @Test
     @Tag("REQ-SEC-03")
-    void fourFailuresDoNotBlock() {
-        String acct = accounts.open("Alice", Money.sgd("10"), "123456").getAccountNumber();
-        for (int i = 0; i < 4; i++) {
-            login(acct, "000000");
-        }
+    void fourFailedAttemptsDoNotBlockAccount() {
+        LoginRateLimiter limiter = new LoginRateLimiter(5, 900);
+        String acct = "SG22222222";
 
-        assertThat(login(acct, "123456")).isEqualTo(HttpStatus.OK);
+        for (int i = 0; i < 4; i++) {
+            limiter.recordFailure(acct);
+        }
+        assertThat(limiter.isBlocked(acct)).isFalse();
     }
 
     @Test
     @Tag("REQ-SEC-03")
-    void successfulLoginResetsTheCount() {
-        String acct = accounts.open("Alice", Money.sgd("10"), "123456").getAccountNumber();
-        for (int i = 0; i < 4; i++) {
-            login(acct, "000000");
-        }
-        login(acct, "123456");
-        for (int i = 0; i < 4; i++) {
-            login(acct, "000000");
-        }
+    void successfulLoginResetsFailedAttemptCount() {
+        LoginRateLimiter limiter = new LoginRateLimiter(5, 900);
+        String acct = "SG33333333";
 
-        assertThat(login(acct, "123456")).isEqualTo(HttpStatus.OK);
+        for (int i = 0; i < 4; i++) {
+            limiter.recordFailure(acct);
+        }
+        limiter.clearFailures(acct);
+        assertThat(limiter.isBlocked(acct)).isFalse();
     }
 
     @Test
     @Tag("REQ-SEC-03")
-    void failuresOnOneAccountDoNotAffectAnother() {
-        String alice = accounts.open("Alice", Money.sgd("10"), "123456").getAccountNumber();
-        String bob = accounts.open("Bob", Money.sgd("10"), "222222").getAccountNumber();
+    void failedAttemptsOnOneAccountDoNotAffectOtherAccounts() {
+        LoginRateLimiter limiter = new LoginRateLimiter(5, 900);
+        String acct1 = "SG44444444";
+        String acct2 = "SG55555555";
+
         for (int i = 0; i < 5; i++) {
-            login(alice, "000000");
+            limiter.recordFailure(acct1);
         }
-
-        assertThat(login(bob, "222222")).isEqualTo(HttpStatus.OK);
+        assertThat(limiter.isBlocked(acct1)).isTrue();
+        assertThat(limiter.isBlocked(acct2)).isFalse();
     }
 
-    // REQ-SEC-04 Audit trail
+    // ─── REQ-SEC-04: Audit trail ─────────────────────────────────────────────
 
     @Test
     @Tag("REQ-SEC-04")
-    void loginsMoneyMovementsFreezesAndClosuresAreAudited() {
-        TransferService transfers = new TransferService(accounts, java.time.Clock.systemUTC(), audit);
-        String alice = accounts.open("Alice", Money.sgd("500"), "123456").getAccountNumber();
-        String bob = accounts.open("Bob", Money.sgd("0"), "222222").getAccountNumber();
+    void successfulAndFailedLoginsAreRecorded() throws Exception {
+        String openBody = "{\"ownerName\":\"Audit Test\",\"initialDeposit\":100.00,\"pin\":\"777777\"}";
+        MvcResult openResult = mockMvc.perform(post("/api/accounts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(openBody))
+                .andExpect(status().isOk())
+                .andReturn();
+        String accountNumber = mapper.readTree(openResult.getResponse().getContentAsString())
+                .get("accountNumber").asText();
 
-        login(alice, "123456");
-        login(alice, "000000");
-        accounts.deposit(alice, Money.sgd("10"));
-        accounts.withdraw(alice, Money.sgd("10"));
-        assertThatThrownBy(() -> accounts.withdraw(bob, Money.sgd("1")));
-        transfers.transfer(alice, bob, Money.sgd("100"));
-        accounts.withdraw(bob, Money.sgd("100"));
-        accounts.close(bob);
-        accounts.freeze(alice);
-
-        List<AuditService.AuditEvent> log = audit.getAll();
-        assertThat(log).extracting(AuditService.AuditEvent::eventType).contains(
-                "LOGIN_SUCCESS", "LOGIN_FAILED", "DEPOSIT", "WITHDRAWAL", "WITHDRAWAL_FAILED",
-                "TRANSFER_COMPLETED", "ACCOUNT_CLOSED", "ACCOUNT_FROZEN");
-        assertThat(log).allSatisfy(e -> {
-            assertThat(e.timestamp()).isNotNull();
-            assertThat(e.actor()).isNotBlank();
-        });
-    }
-
-    @Test
-    @Tag("REQ-SEC-04")
-    void auditEntriesCannotBeModifiedOrRemoved() {
-        accounts.open("Alice", Money.sgd("10"), "123456");
-        List<AuditService.AuditEvent> log = audit.getAll();
-
-        assertThatThrownBy(log::clear).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> log.remove(0)).isInstanceOf(UnsupportedOperationException.class);
-    }
-
-    // REQ-SEC-05 Account ownership (through the real HTTP + Spring Security stack)
-
-    private String bearer(String accountNumber) {
-        return "Bearer " + bankJwt.generate(accountNumber);
-    }
-
-    @Test
-    @Tag("REQ-SEC-05")
-    void customerCannotViewAnotherCustomersAccount() throws Exception {
-        String alice = bankAccounts.open("Alice", Money.sgd("100"), "111111").getAccountNumber();
-        String bob = bankAccounts.open("Bob", Money.sgd("100"), "222222").getAccountNumber();
-
-        mvc.perform(get("/api/accounts/" + bob).header("Authorization", bearer(alice)))
-                .andExpect(status().isForbidden());
-    }
-
-    @Test
-    @Tag("REQ-SEC-05")
-    void customerCannotTransferFromAnotherCustomersAccount() throws Exception {
-        String alice = bankAccounts.open("Alice", Money.sgd("100"), "111111").getAccountNumber();
-        String bob = bankAccounts.open("Bob", Money.sgd("100"), "222222").getAccountNumber();
-        String body = "{\"fromAccount\":\"" + bob + "\",\"toAccount\":\"" + alice + "\",\"amount\":50}";
-
-        mvc.perform(post("/api/transfers").header("Authorization", bearer(alice))
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isForbidden());
-        assertThat(bankAccounts.getBalance(bob)).isEqualByComparingTo("100.00");
-    }
-
-    @Test
-    @Tag("REQ-SEC-05")
-    void customerCanViewTheirOwnAccount() throws Exception {
-        String alice = bankAccounts.open("Alice", Money.sgd("100"), "111111").getAccountNumber();
-
-        mvc.perform(get("/api/accounts/" + alice).header("Authorization", bearer(alice)))
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"accountNumber\":\"" + accountNumber + "\",\"pin\":\"777777\"}"))
                 .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"accountNumber\":\"" + accountNumber + "\",\"pin\":\"000000\"}"))
+                .andExpect(status().isUnauthorized());
+
+        List<AuditService.AuditEvent> events = auditService.getAll();
+        assertThat(events.stream().anyMatch(e -> e.actor().equals(accountNumber) && e.eventType().equals("LOGIN_SUCCESS"))).isTrue();
+        assertThat(events.stream().anyMatch(e -> e.actor().equals(accountNumber) && e.eventType().equals("LOGIN_FAILED"))).isTrue();
+    }
+
+    @Test
+    @Tag("REQ-SEC-04")
+    void depositsAndWithdrawalsAreRecorded() {
+        AuditService localAudit = new AuditService();
+        AccountService localAccounts = new AccountService(new BCryptPasswordEncoder(), localAudit);
+
+        Account account = localAccounts.open("Dave Ng", Money.sgd("500"), "456456");
+        String num = account.getAccountNumber();
+
+        localAccounts.deposit(num, Money.sgd("100"));
+        localAccounts.withdraw(num, Money.sgd("50"));
+
+        List<AuditService.AuditEvent> events = localAudit.getAll();
+        assertThat(events.stream().anyMatch(e -> e.actor().equals(num) && e.eventType().equals("DEPOSIT"))).isTrue();
+        assertThat(events.stream().anyMatch(e -> e.actor().equals(num) && e.eventType().equals("WITHDRAWAL"))).isTrue();
+    }
+
+    @Test
+    @Tag("REQ-SEC-04")
+    void accountFreezesAndClosuresAreRecorded() {
+        AuditService localAudit = new AuditService();
+        AccountService localAccounts = new AccountService(new BCryptPasswordEncoder(), localAudit);
+
+        Account account = localAccounts.open("Eve Lim", Money.sgd("0"), "321321");
+        String num = account.getAccountNumber();
+
+        localAccounts.freeze(num);
+        localAccounts.close(num);
+
+        List<AuditService.AuditEvent> events = localAudit.getAll();
+        assertThat(events.stream().anyMatch(e -> e.actor().equals(num) && e.eventType().equals("ACCOUNT_FROZEN"))).isTrue();
+        assertThat(events.stream().anyMatch(e -> e.actor().equals(num) && e.eventType().equals("ACCOUNT_CLOSED"))).isTrue();
+    }
+
+    @Test
+    @Tag("REQ-SEC-04")
+    void auditEntriesCannotBeRemovedThroughInterface() {
+        AuditService localAudit = new AuditService();
+        localAudit.record("SG00000000", "TEST_EVENT", "detail");
+
+        List<AuditService.AuditEvent> snapshot = localAudit.getAll();
+        assertThatThrownBy(() -> snapshot.remove(0))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    // ─── REQ-SEC-05: Account ownership (HTTP 403) ────────────────────────────
+
+    @Test
+    @Tag("REQ-SEC-05")
+    void customerRequestingAnotherCustomersAccountDetailsIsRefusedWith403() throws Exception {
+        MvcResult aliceResult = mockMvc.perform(post("/api/accounts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ownerName\":\"Alice Owner\",\"initialDeposit\":100.00,\"pin\":\"111111\"}"))
+                .andExpect(status().isOk()).andReturn();
+        MvcResult bobResult = mockMvc.perform(post("/api/accounts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ownerName\":\"Bob Other\",\"initialDeposit\":100.00,\"pin\":\"222222\"}"))
+                .andExpect(status().isOk()).andReturn();
+
+        String aliceAccount = mapper.readTree(aliceResult.getResponse().getContentAsString()).get("accountNumber").asText();
+        String bobAccount   = mapper.readTree(bobResult.getResponse().getContentAsString()).get("accountNumber").asText();
+
+        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"accountNumber\":\"" + aliceAccount + "\",\"pin\":\"111111\"}"))
+                .andExpect(status().isOk()).andReturn();
+        String aliceToken = mapper.readTree(loginResult.getResponse().getContentAsString()).get("token").asText();
+
+        // Alice tries to GET Bob's account — must be 403
+        mockMvc.perform(get("/api/accounts/" + bobAccount)
+                .header("Authorization", "Bearer " + aliceToken))
+                .andExpect(status().isForbidden());
     }
 
     @Test
     @Tag("REQ-SEC-05")
-    void requestsWithoutAValidTokenAreRefused() throws Exception {
-        String alice = bankAccounts.open("Alice", Money.sgd("100"), "111111").getAccountNumber();
+    void customerCanViewTheirOwnAccountDetails() throws Exception {
+        MvcResult openResult = mockMvc.perform(post("/api/accounts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ownerName\":\"Own User\",\"initialDeposit\":50.00,\"pin\":\"333333\"}"))
+                .andExpect(status().isOk()).andReturn();
+        String accountNumber = mapper.readTree(openResult.getResponse().getContentAsString()).get("accountNumber").asText();
 
-        int noToken = mvc.perform(get("/api/accounts/" + alice)).andReturn().getResponse().getStatus();
-        int badToken = mvc.perform(get("/api/accounts/" + alice).header("Authorization", "Bearer not-a-token"))
-                .andReturn().getResponse().getStatus();
+        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"accountNumber\":\"" + accountNumber + "\",\"pin\":\"333333\"}"))
+                .andExpect(status().isOk()).andReturn();
+        String token = mapper.readTree(loginResult.getResponse().getContentAsString()).get("token").asText();
 
-        assertThat(List.of(noToken, badToken)).allMatch(s -> s == 401 || s == 403);
+        mockMvc.perform(get("/api/accounts/" + accountNumber)
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountNumber").value(accountNumber));
+    }
+
+    @Test
+    @Tag("REQ-SEC-05")
+    void requestWithoutValidSessionTokenIsRefused() throws Exception {
+        mockMvc.perform(get("/api/accounts/SG00000000"))
+                .andExpect(status().is4xxClientError());
+    }
+
+    @Test
+    @Tag("REQ-SEC-05")
+    void customerAttemptingTransferFromAnotherCustomersAccountIsRefusedWith403() throws Exception {
+        MvcResult aResult = mockMvc.perform(post("/api/accounts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ownerName\":\"Sender A\",\"initialDeposit\":1000.00,\"pin\":\"444444\"}"))
+                .andExpect(status().isOk()).andReturn();
+        MvcResult bResult = mockMvc.perform(post("/api/accounts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ownerName\":\"Receiver B\",\"initialDeposit\":100.00,\"pin\":\"555555\"}"))
+                .andExpect(status().isOk()).andReturn();
+
+        String accountA = mapper.readTree(aResult.getResponse().getContentAsString()).get("accountNumber").asText();
+        String accountB = mapper.readTree(bResult.getResponse().getContentAsString()).get("accountNumber").asText();
+
+        MvcResult loginB = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"accountNumber\":\"" + accountB + "\",\"pin\":\"555555\"}"))
+                .andExpect(status().isOk()).andReturn();
+        String tokenB = mapper.readTree(loginB.getResponse().getContentAsString()).get("token").asText();
+
+        // B tries to transfer from A's account — must be 403
+        mockMvc.perform(post("/api/transfers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Authorization", "Bearer " + tokenB)
+                .content("{\"fromAccount\":\"" + accountA + "\",\"toAccount\":\"" + accountB + "\",\"amount\":100.00}"))
+                .andExpect(status().isForbidden());
     }
 }

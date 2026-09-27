@@ -21,7 +21,7 @@
 | 0:45 | Bob extracts the requirements; todo list appears | "Bob reads the PDF, including tables and acceptance criteria, and finds all 27 requirements." |
 | 1:00 | **Parallel subagents panel**: 4 running | "It sends out one subagent per module, in parallel. Each one finds the code, checks the existing tests, writes the missing ones, and runs them in its own build dir." |
 | 1:45 | Subagent summaries | "Transfers found something: the spec says the daily limit is inclusive, but the code uses `>=`. And look at security: with Alice's login, it just moved money out of Bob's account." |
-| 2:00 | `matrix.html` opens | "We don't just take the agents' word for it. This script rebuilds every status from the actual test results. 12 covered, 10 newly tested, **3 real bugs**, 2 features never built. We planted two of those bugs. We didn't plant the security one: it came in with our own login code, and SpecTrace caught it. Notice the time-saved banner at the top." |
+| 2:00 | `matrix.html` opens | "We don't just take the agents' word for it. This script rebuilds every status from the actual test results. 11 covered, 11 newly tested, **3 real bugs**, 2 features never built. And one 'covered' requirement wasn't fully covered: Bob noticed no test checked that a zero opening deposit is allowed, and wrote one. We planted two of those bugs. We didn't plant the security one: it came in with our own login code, and SpecTrace caught it. Notice the time-saved banner at the top." |
 | 2:20 | Type `/fix` | "Now watch the close-the-loop moment. Bob reads the matrix, finds the three failing requirements, patches the production code, including an ownership check on every account endpoint…" |
 | 2:35 | Fixer runs, re-traces, matrix reloads | "…re-runs the suite, and the matrix goes green. Before/after table right there in the chat." |
 | 2:50 | Type `/release-notes v1.0.0` | "One more command generates the release-readiness report — a document you can hand to an auditor." |
@@ -32,10 +32,12 @@
 
 Compare with `demo-kit/answer-key/expected-matrix.html`.
 
-- **Covered (12):** ACC-01/02/03/04/08, TRF-01/02/05, LN-01/02/05/07
-- **Newly tested (10):** ACC-05, ACC-06, TRF-04, TRF-06, LN-04, LN-06, SEC-01, SEC-02, SEC-03, SEC-04
+Recorded live Bob run (26.2 min). Bob writes its own tests, so a new run can differ slightly; what matters is 3 bugs, 2 gaps, 0 disagreements, 0 bad references.
+
+- **Covered (11):** ACC-02/03/04/08, TRF-01/02/05, LN-01/02/05/07
+- **Newly tested (11):** ACC-01 (existing tests never checked the SGD 0.00 opening deposit), ACC-05, ACC-06, TRF-04, TRF-06, LN-04, LN-06, SEC-01, SEC-02, SEC-03, SEC-04
 - **Bug (3):** TRF-03 (`TransferService.java:50`, `>= 0` should be `> 0`); LN-03 (`LoanService.java:60`, `RoundingMode.DOWN` should be `HALF_UP`: 754.89 vs 754.90); SEC-05 (no ownership check: with Alice's token, `GET /api/accounts/{bob}` and a transfer from Bob's account both return 200 instead of 403; see `AccountController.java:44`, `TransferController.java:35`)
-- **Tests added:** 32 (17 of them security)
+- **Tests added:** 39
 - **Not implemented (2):** ACC-07 PIN lockout, TRF-07 scheduled transfers
 - **v2 re-run:** LN-06 becomes a bug (fee 246.91 expected, code gives 185.19); only the loans subagent runs; changed row is highlighted with "was: Newly tested" diff badge.
 - **After `/fix`:** TRF-03, LN-03 and SEC-05 flip from Bug → Newly tested (their tests are new this run), each with a "was: Bug found" badge; time-saved banner updates.

@@ -8,7 +8,7 @@
         {
           "file": "bank-app/src/main/java/com/spectrace/bank/loans/LoanService.java",
           "symbol": "LoanService#evaluate",
-          "line": 68
+          "line": 69
         }
       ],
       "tests": [
@@ -18,7 +18,7 @@
           "new": false
         }
       ],
-      "notes": "evaluate() rejects amounts below SGD 1,000.00 and above SGD 100,000.00; boundary values 999.99 and 100,000.01 are rejected, 1,000.00 and 100,000.00 are accepted."
+      "notes": ""
     },
     {
       "id": "REQ-LN-02",
@@ -37,7 +37,7 @@
           "new": false
         }
       ],
-      "notes": "evaluate() rejects tenure < 12 or > 60 months; boundary values 11 and 61 are rejected, 12 and 60 are accepted."
+      "notes": ""
     },
     {
       "id": "REQ-LN-03",
@@ -52,16 +52,16 @@
       "tests": [
         {
           "class": "com.spectrace.bank.loans.LoansRequirementsTest",
-          "method": "instalment_25000_at_5_5pct_36months",
+          "method": "instalmentFor25000At5_5PercentOver36MonthsIs754_90",
           "new": true
         },
         {
           "class": "com.spectrace.bank.loans.LoansRequirementsTest",
-          "method": "instalment_60000_at_4_5pct_48months",
+          "method": "instalmentFor60000At4_5PercentOver48MonthsIs1368_21",
           "new": true
         }
       ],
-      "notes": "Spec requires HALF_UP rounding; code uses RoundingMode.DOWN at LoanService.java:60 — 25,000/5.5%/36m yields 754.89 (expected 754.90) and 60,000/4.5%/48m yields 1368.20 (expected 1368.21)."
+      "notes": "BUG: spec requires half-up rounding to the cent, but the code truncates with RoundingMode.DOWN (LoanService.java:60): 754.8975 becomes 754.89 instead of 754.90. Every customer is under-quoted by up to 1 cent/month."
     },
     {
       "id": "REQ-LN-04",
@@ -76,16 +76,16 @@
       "tests": [
         {
           "class": "com.spectrace.bank.loans.LoansRequirementsTest",
-          "method": "insufficientIncomeIsRejectedWithAffordabilityReason",
+          "method": "applicationIsRejectedWhenIncomeBelowThreeTimesInstalment",
           "new": true
         },
         {
           "class": "com.spectrace.bank.loans.LoansRequirementsTest",
-          "method": "incomeOfExactly3xInstalmentIsEligible",
+          "method": "applicationIsApprovedWhenIncomeAtLeastThreeTimesInstalment",
           "new": true
         }
       ],
-      "notes": "evaluate() computes requiredIncome = instalment * 3 and rejects if monthlyIncome < requiredIncome; income equal to 3x is allowed. Note: affordability check uses the instalment computed by monthlyInstalment, which itself has the HALF_UP bug (REQ-LN-03), but the affordability logic itself is correct."
+      "notes": ""
     },
     {
       "id": "REQ-LN-05",
@@ -104,7 +104,7 @@
           "new": false
         }
       ],
-      "notes": "interestRateFor() returns 6.5% below SGD 20,000, 5.5% for SGD 20,000–50,000 inclusive, 4.5% above SGD 50,000; all tier boundaries tested."
+      "notes": ""
     },
     {
       "id": "REQ-LN-06",
@@ -119,16 +119,11 @@
       "tests": [
         {
           "class": "com.spectrace.bank.loans.LoansRequirementsTest",
-          "method": "earlyRepaymentFee_12345_67",
-          "new": true
-        },
-        {
-          "class": "com.spectrace.bank.loans.LoansRequirementsTest",
-          "method": "earlyRepaymentFee_10000_00",
+          "method": "earlyRepaymentFeeIsOnePointFivePercentRoundedHalfUp",
           "new": true
         }
       ],
-      "notes": "earlyRepaymentFee() multiplies outstanding principal by 0.015 and rounds HALF_UP via Money.round(); both spec values (185.19 and 150.00) verified."
+      "notes": ""
     },
     {
       "id": "REQ-LN-07",
@@ -138,11 +133,6 @@
           "file": "bank-app/src/main/java/com/spectrace/bank/loans/LoanService.java",
           "symbol": "LoanService#apply",
           "line": 30
-        },
-        {
-          "file": "bank-app/src/main/java/com/spectrace/bank/loans/LoanService.java",
-          "symbol": "LoanService#get",
-          "line": 37
         }
       ],
       "tests": [
@@ -152,7 +142,7 @@
           "new": false
         }
       ],
-      "notes": "Approved loans have null rejectionReason; rejected loans carry a non-blank reason. Applied loans are stored in a map and retrievable by id via get()."
+      "notes": ""
     }
   ]
 }

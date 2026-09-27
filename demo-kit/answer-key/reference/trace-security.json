@@ -12,33 +12,33 @@
         },
         {
           "file": "bank-app/src/main/java/com/spectrace/bank/accounts/Account.java",
-          "symbol": "Account#pinMatches",
-          "line": 48
+          "symbol": "Account#pinHash",
+          "line": 16
         },
         {
-          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/Account.java",
-          "symbol": "Account",
-          "line": 15
+          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
+          "symbol": "AccountService#verifyPin",
+          "line": 98
         }
       ],
       "tests": [
         {
           "class": "com.spectrace.bank.security.SecurityRequirementsTest",
-          "method": "storedPinIsNotPlainText",
+          "method": "storedPinIsAHashNotThePlainTextPin",
           "new": true
         },
         {
           "class": "com.spectrace.bank.security.SecurityRequirementsTest",
-          "method": "correctPinVerifiesAndIncorrectPinDoesNot",
+          "method": "correctPinVerifiesAndWrongPinDoesNot",
           "new": true
         },
         {
           "class": "com.spectrace.bank.security.SecurityRequirementsTest",
-          "method": "apiResponseContainsNoPinOrPinHashField",
+          "method": "accountJsonContainsNoPinOrHash",
           "new": true
         }
       ],
-      "notes": "PIN is BCrypt-hashed in AccountService#open (line 38) and never returned by the API thanks to @JsonIgnore on Account#pinHash (line 15). All three acceptance criteria verified and passing."
+      "notes": "PIN is BCrypt-hashed on open (AccountService.java:38); pinHash is @JsonIgnore so it never appears in responses."
     },
     {
       "id": "REQ-SEC-02",
@@ -51,11 +51,6 @@
         },
         {
           "file": "bank-app/src/main/java/com/spectrace/bank/security/JwtUtil.java",
-          "symbol": "JwtUtil#validate",
-          "line": 47
-        },
-        {
-          "file": "bank-app/src/main/java/com/spectrace/bank/security/JwtUtil.java",
           "symbol": "JwtUtil#isValid",
           "line": 57
         }
@@ -63,7 +58,7 @@
       "tests": [
         {
           "class": "com.spectrace.bank.security.SecurityRequirementsTest",
-          "method": "freshlyIssuedTokenIsAcceptedAndIdentifiesAccount",
+          "method": "freshTokenIsAcceptedAndIdentifiesTheAccount",
           "new": true
         },
         {
@@ -78,11 +73,11 @@
         },
         {
           "class": "com.spectrace.bank.security.SecurityRequirementsTest",
-          "method": "tokenLifetimeIs60Minutes",
+          "method": "tokenLifetimeIsSixtyMinutes",
           "new": true
         }
       ],
-      "notes": "JwtUtil signs HS256 tokens with subject=accountNumber and expiry=3600 s (60 min) as configured in application.properties. All four acceptance criteria verified and passing."
+      "notes": "HS256-signed JWT, subject = account number, expiry from bank.jwt.expiry-seconds=3600."
     },
     {
       "id": "REQ-SEC-03",
@@ -94,16 +89,6 @@
           "line": 33
         },
         {
-          "file": "bank-app/src/main/java/com/spectrace/bank/security/LoginRateLimiter.java",
-          "symbol": "LoginRateLimiter#recordFailure",
-          "line": 40
-        },
-        {
-          "file": "bank-app/src/main/java/com/spectrace/bank/security/LoginRateLimiter.java",
-          "symbol": "LoginRateLimiter#clearFailures",
-          "line": 46
-        },
-        {
           "file": "bank-app/src/main/java/com/spectrace/bank/security/AuthController.java",
           "symbol": "AuthController#login",
           "line": 46
@@ -112,26 +97,26 @@
       "tests": [
         {
           "class": "com.spectrace.bank.security.SecurityRequirementsTest",
-          "method": "after5FailedAttemptsNextAttemptIsRefused",
+          "method": "afterFiveFailuresEvenTheCorrectPinIsRefused",
           "new": true
         },
         {
           "class": "com.spectrace.bank.security.SecurityRequirementsTest",
-          "method": "fourFailedAttemptsDoNotBlockAccount",
+          "method": "fourFailuresDoNotBlock",
           "new": true
         },
         {
           "class": "com.spectrace.bank.security.SecurityRequirementsTest",
-          "method": "successfulLoginResetsFailedAttemptCount",
+          "method": "successfulLoginResetsTheCount",
           "new": true
         },
         {
           "class": "com.spectrace.bank.security.SecurityRequirementsTest",
-          "method": "failedAttemptsOnOneAccountDoNotAffectOtherAccounts",
+          "method": "failuresOnOneAccountDoNotAffectAnother",
           "new": true
         }
       ],
-      "notes": "Sliding-window rate limiter blocks after 5 failures in 900 s window; clearFailures() resets on success; per-account isolation verified. All four acceptance criteria passing."
+      "notes": "Sliding 15-minute window per account; AuthController checks isBlocked before verifying the PIN and returns 429."
     },
     {
       "id": "REQ-SEC-04",
@@ -146,66 +131,26 @@
           "file": "bank-app/src/main/java/com/spectrace/bank/common/AuditService.java",
           "symbol": "AuditService#getAll",
           "line": 32
-        },
-        {
-          "file": "bank-app/src/main/java/com/spectrace/bank/security/AuthController.java",
-          "symbol": "AuthController#login",
-          "line": 50
-        },
-        {
-          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
-          "symbol": "AccountService#deposit",
-          "line": 59
-        },
-        {
-          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
-          "symbol": "AccountService#withdraw",
-          "line": 69
-        },
-        {
-          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
-          "symbol": "AccountService#freeze",
-          "line": 94
-        },
-        {
-          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
-          "symbol": "AccountService#close",
-          "line": 87
         }
       ],
       "tests": [
         {
           "class": "com.spectrace.bank.security.SecurityRequirementsTest",
-          "method": "successfulAndFailedLoginsAreRecorded",
+          "method": "loginsMoneyMovementsFreezesAndClosuresAreAudited",
           "new": true
         },
         {
           "class": "com.spectrace.bank.security.SecurityRequirementsTest",
-          "method": "depositsAndWithdrawalsAreRecorded",
-          "new": true
-        },
-        {
-          "class": "com.spectrace.bank.security.SecurityRequirementsTest",
-          "method": "accountFreezesAndClosuresAreRecorded",
-          "new": true
-        },
-        {
-          "class": "com.spectrace.bank.security.SecurityRequirementsTest",
-          "method": "auditEntriesCannotBeRemovedThroughInterface",
+          "method": "auditEntriesCannotBeModifiedOrRemoved",
           "new": true
         }
       ],
-      "notes": "AuditService uses a CopyOnWriteArrayList and returns Collections.unmodifiableList; all required event types are recorded in the relevant service and controller methods. All four acceptance criteria passing."
+      "notes": "Append-only CopyOnWriteArrayList; getAll() returns an unmodifiable view."
     },
     {
       "id": "REQ-SEC-05",
       "status": "FAILING",
       "implementation": [
-        {
-          "file": "bank-app/src/main/java/com/spectrace/bank/security/SecurityConfig.java",
-          "symbol": "SecurityConfig#filterChain",
-          "line": 44
-        },
         {
           "file": "bank-app/src/main/java/com/spectrace/bank/security/JwtAuthFilter.java",
           "symbol": "JwtAuthFilter#doFilterInternal",
@@ -225,26 +170,26 @@
       "tests": [
         {
           "class": "com.spectrace.bank.security.SecurityRequirementsTest",
-          "method": "customerRequestingAnotherCustomersAccountDetailsIsRefusedWith403",
+          "method": "customerCannotViewAnotherCustomersAccount",
           "new": true
         },
         {
           "class": "com.spectrace.bank.security.SecurityRequirementsTest",
-          "method": "customerCanViewTheirOwnAccountDetails",
+          "method": "customerCannotTransferFromAnotherCustomersAccount",
           "new": true
         },
         {
           "class": "com.spectrace.bank.security.SecurityRequirementsTest",
-          "method": "requestWithoutValidSessionTokenIsRefused",
+          "method": "customerCanViewTheirOwnAccount",
           "new": true
         },
         {
           "class": "com.spectrace.bank.security.SecurityRequirementsTest",
-          "method": "customerAttemptingTransferFromAnotherCustomersAccountIsRefusedWith403",
+          "method": "requestsWithoutAValidTokenAreRefused",
           "new": true
         }
       ],
-      "notes": "BUG 1: spec expects HTTP 403 when customer A reads customer B's account, but AccountController#get (line 44) returns 200 — no ownership check against the JWT principal. BUG 2: spec expects HTTP 403 when customer B initiates a transfer from customer A's account, but TransferController#transfer (line 35) returns 200 — no ownership check on fromAccount against the JWT principal."
+      "notes": "BUG (security): the JWT filter authenticates the caller, but no controller checks that the account in the request belongs to them. With Alice's token, GET /api/accounts/{bob} returns 200, and POST /api/transfers with fromAccount=bob moves Bob's money (AccountController.java:44, TransferController.java:35). This is Broken Object Level Authorization (OWASP API1)."
     }
   ]
 }

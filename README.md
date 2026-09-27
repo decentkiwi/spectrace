@@ -67,7 +67,7 @@ The checker is itself tested (`python3 -m unittest discover -s tools`): 20 tests
 matter, including an agent claiming "covered" while its test fails, tests that are listed but not tagged
 or never run, wrong `file:line` references, and Bob's tests being committed before the report is built.
 CI (`.github/workflows/ci.yml`) runs these, the app tests, and a replay that must still produce the
-expected 12/10/3/2 matrix with no disagreements.
+11/11/3/2 matrix of the recorded live Bob run, with no disagreements.
 
 The diff view in the HTML matrix highlights every requirement whose status changed since the previous
 run, with a "was: X" badge — so incremental re-traces are immediately obvious.
@@ -126,8 +126,8 @@ The security layer is tested via the existing service tests (using `NoOpPassword
 
 | | Manual | SpecTrace |
 |---|---|---|
-| Build the traceability matrix for 27 requirements | ~13.5 h (30 min/req estimate) | _measured per run, in `metrics.json`_ |
-| Missing tests | written by hand, often skipped | 32 tagged tests written automatically |
+| Build the traceability matrix for 27 requirements | ~13.5 h (30 min/req estimate) | **26.2 min**, measured on a live Bob run |
+| Missing tests | written by hand, often skipped | 39 tagged tests written automatically |
 | Spec-vs-code bugs before release | found in UAT, production, or by attackers | 3 found (1 a real security hole), with root-cause `file:line` |
 | Bug fix loop | find → fix → re-test → update spreadsheet | `/fix` → matrix auto-updates |
 | Spec change | redo the spreadsheet | re-trace only changed modules |

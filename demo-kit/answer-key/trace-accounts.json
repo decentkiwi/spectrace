@@ -3,159 +3,92 @@
   "requirements": [
     {
       "id": "REQ-ACC-01",
-      "status": "COVERED",
+      "status": "NEW_TEST_PASS",
       "implementation": [
-        {
-          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
-          "symbol": "AccountService#open",
-          "line": 27
-        }
+        { "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java", "symbol": "AccountService#open", "line": 27 }
       ],
       "tests": [
-        {
-          "class": "com.spectrace.bank.accounts.AccountServiceTest",
-          "method": "opensAccountWithOwnerAndInitialDeposit",
-          "new": false
-        },
-        {
-          "class": "com.spectrace.bank.accounts.AccountServiceTest",
-          "method": "rejectsBlankOwnerOrNegativeDeposit",
-          "new": false
-        }
+        { "class": "com.spectrace.bank.accounts.AccountServiceTest", "method": "opensAccountWithOwnerAndInitialDeposit", "new": false },
+        { "class": "com.spectrace.bank.accounts.AccountServiceTest", "method": "rejectsBlankOwnerOrNegativeDeposit", "new": false },
+        { "class": "com.spectrace.bank.accounts.AccountsRequirementsTest", "method": "zeroInitialDepositIsAllowed", "new": true }
       ],
-      "notes": "Validation of name, deposit and PIN in open()."
+      "notes": "Existing tests cover blank-name rejection, negative-deposit rejection, and initial balance/status. New test covers the missing criterion that SGD 0.00 initial deposit is allowed."
     },
     {
       "id": "REQ-ACC-02",
       "status": "COVERED",
       "implementation": [
-        {
-          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
-          "symbol": "AccountService#nextAccountNumber",
-          "line": 110
-        }
+        { "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java", "symbol": "AccountService#nextAccountNumber", "line": 110 }
       ],
       "tests": [
-        {
-          "class": "com.spectrace.bank.accounts.AccountServiceTest",
-          "method": "accountNumbersFollowFormatAndAreUnique",
-          "new": false
-        }
+        { "class": "com.spectrace.bank.accounts.AccountServiceTest", "method": "accountNumbersFollowFormatAndAreUnique", "new": false }
       ],
-      "notes": "SG + 8 digits with a uniqueness loop."
+      "notes": "nextAccountNumber() generates 'SG' + 8-digit zero-padded random int and loops until unique. Test asserts both accounts match SG\\d{8} and are distinct."
     },
     {
       "id": "REQ-ACC-03",
       "status": "COVERED",
       "implementation": [
-        {
-          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
-          "symbol": "AccountService#deposit",
-          "line": 55
-        }
+        { "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java", "symbol": "AccountService#deposit", "line": 53 }
       ],
       "tests": [
-        {
-          "class": "com.spectrace.bank.accounts.AccountServiceTest",
-          "method": "depositIncreasesBalanceAndMustBePositive",
-          "new": false
-        }
+        { "class": "com.spectrace.bank.accounts.AccountServiceTest", "method": "depositIncreasesBalanceAndMustBePositive", "new": false }
       ],
-      "notes": ""
+      "notes": "deposit() rejects non-positive amounts and adds the exact amount (Money.round) to the balance. Test asserts 100 + 50.25 = 150.25 and zero is rejected."
     },
     {
       "id": "REQ-ACC-04",
       "status": "COVERED",
       "implementation": [
-        {
-          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
-          "symbol": "AccountService#withdraw",
-          "line": 68
-        }
+        { "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java", "symbol": "AccountService#withdraw", "line": 63 }
       ],
       "tests": [
-        {
-          "class": "com.spectrace.bank.accounts.AccountServiceTest",
-          "method": "withdrawalBeyondBalanceIsRejected",
-          "new": false
-        }
+        { "class": "com.spectrace.bank.accounts.AccountServiceTest", "method": "withdrawalBeyondBalanceIsRejected", "new": false }
       ],
-      "notes": ""
+      "notes": "withdraw() throws InsufficientFundsException when amount exceeds balance; balance is unchanged after the rejection. Test asserts both criteria."
     },
     {
       "id": "REQ-ACC-05",
       "status": "NEW_TEST_PASS",
       "implementation": [
-        {
-          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
-          "symbol": "AccountService#close",
-          "line": 83
-        }
+        { "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java", "symbol": "AccountService#close", "line": 81 }
       ],
       "tests": [
-        {
-          "class": "com.spectrace.bank.accounts.AccountsRequirementsTest",
-          "method": "closingAccountWithNonZeroBalanceIsRejected",
-          "new": true
-        },
-        {
-          "class": "com.spectrace.bank.accounts.AccountsRequirementsTest",
-          "method": "closingAccountWithZeroBalanceMarksItClosed",
-          "new": true
-        }
+        { "class": "com.spectrace.bank.accounts.AccountsRequirementsTest", "method": "closingAccountWithNonZeroBalanceIsRejected", "new": true },
+        { "class": "com.spectrace.bank.accounts.AccountsRequirementsTest", "method": "closingAccountWithZeroBalanceSetsStatusToClosed", "new": true }
       ],
-      "notes": "Implemented; had no tests."
+      "notes": "close() guards on signum()!=0 and throws BankException, leaving status ACTIVE. With zero balance it sets status to CLOSED. Both acceptance criteria verified by new tests."
     },
     {
       "id": "REQ-ACC-06",
       "status": "NEW_TEST_PASS",
       "implementation": [
-        {
-          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
-          "symbol": "AccountService#requireActive",
-          "line": 102
-        }
+        { "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java", "symbol": "AccountService#requireActive", "line": 102 }
       ],
       "tests": [
-        {
-          "class": "com.spectrace.bank.accounts.AccountsRequirementsTest",
-          "method": "frozenAccountRejectsDepositsAndWithdrawals",
-          "new": true
-        }
+        { "class": "com.spectrace.bank.accounts.AccountsRequirementsTest", "method": "depositToFrozenAccountIsRejected", "new": true },
+        { "class": "com.spectrace.bank.accounts.AccountsRequirementsTest", "method": "withdrawalFromFrozenAccountIsRejected", "new": true },
+        { "class": "com.spectrace.bank.accounts.AccountsRequirementsTest", "method": "frozenAccountBalanceUnchangedAfterRejectedOperations", "new": true }
       ],
-      "notes": "Enforced via requireActive()."
+      "notes": "requireActive() throws BankException for any non-ACTIVE status; both deposit() and withdraw() delegate to it. All three acceptance criteria covered by new tests."
     },
     {
       "id": "REQ-ACC-07",
       "status": "NOT_IMPLEMENTED",
-      "implementation": [
-        {
-          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
-          "symbol": "AccountService#verifyPin",
-          "line": 98
-        }
-      ],
+      "implementation": [],
       "tests": [],
-      "notes": "verifyPin() only compares the PIN. No failed-attempt counter or auto-freeze exists. Implement in AccountService#verifyPin (AccountService.java:98) with a counter on Account."
+      "notes": "AccountService has no failed-PIN counter or lockout logic. LoginRateLimiter (com.spectrace.bank.security) is HTTP-level login throttling, not account-level PIN lockout, and does not satisfy this requirement."
     },
     {
       "id": "REQ-ACC-08",
       "status": "COVERED",
       "implementation": [
-        {
-          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
-          "symbol": "AccountService#getBalance",
-          "line": 77
-        }
+        { "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java", "symbol": "AccountService#getBalance", "line": 77 }
       ],
       "tests": [
-        {
-          "class": "com.spectrace.bank.accounts.AccountServiceTest",
-          "method": "balanceEnquiryIsRoundedToTwoDecimals",
-          "new": false
-        }
+        { "class": "com.spectrace.bank.accounts.AccountServiceTest", "method": "balanceEnquiryIsRoundedToTwoDecimals", "new": false }
       ],
-      "notes": ""
+      "notes": "getBalance() calls Money.round (HALF_UP, 2 d.p.). Existing test opens account with 10.005 and asserts getBalance() returns 10.01."
     }
   ]
 }

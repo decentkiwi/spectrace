@@ -1,0 +1,161 @@
+{
+  "module": "accounts",
+  "requirements": [
+    {
+      "id": "REQ-ACC-01",
+      "status": "COVERED",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
+          "symbol": "AccountService#open",
+          "line": 27
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.accounts.AccountServiceTest",
+          "method": "opensAccountWithOwnerAndInitialDeposit",
+          "new": false
+        },
+        {
+          "class": "com.spectrace.bank.accounts.AccountServiceTest",
+          "method": "rejectsBlankOwnerOrNegativeDeposit",
+          "new": false
+        }
+      ],
+      "notes": "Validation of name, deposit and PIN in open()."
+    },
+    {
+      "id": "REQ-ACC-02",
+      "status": "COVERED",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
+          "symbol": "AccountService#nextAccountNumber",
+          "line": 110
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.accounts.AccountServiceTest",
+          "method": "accountNumbersFollowFormatAndAreUnique",
+          "new": false
+        }
+      ],
+      "notes": "SG + 8 digits with a uniqueness loop."
+    },
+    {
+      "id": "REQ-ACC-03",
+      "status": "COVERED",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
+          "symbol": "AccountService#deposit",
+          "line": 55
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.accounts.AccountServiceTest",
+          "method": "depositIncreasesBalanceAndMustBePositive",
+          "new": false
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "REQ-ACC-04",
+      "status": "COVERED",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
+          "symbol": "AccountService#withdraw",
+          "line": 68
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.accounts.AccountServiceTest",
+          "method": "withdrawalBeyondBalanceIsRejected",
+          "new": false
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "REQ-ACC-05",
+      "status": "NEW_TEST_PASS",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
+          "symbol": "AccountService#close",
+          "line": 83
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.accounts.AccountsRequirementsTest",
+          "method": "closingAccountWithNonZeroBalanceIsRejected",
+          "new": true
+        },
+        {
+          "class": "com.spectrace.bank.accounts.AccountsRequirementsTest",
+          "method": "closingAccountWithZeroBalanceMarksItClosed",
+          "new": true
+        }
+      ],
+      "notes": "Implemented; had no tests."
+    },
+    {
+      "id": "REQ-ACC-06",
+      "status": "NEW_TEST_PASS",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
+          "symbol": "AccountService#requireActive",
+          "line": 102
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.accounts.AccountsRequirementsTest",
+          "method": "frozenAccountRejectsDepositsAndWithdrawals",
+          "new": true
+        }
+      ],
+      "notes": "Enforced via requireActive()."
+    },
+    {
+      "id": "REQ-ACC-07",
+      "status": "NOT_IMPLEMENTED",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
+          "symbol": "AccountService#verifyPin",
+          "line": 98
+        }
+      ],
+      "tests": [],
+      "notes": "verifyPin() only compares the PIN. No failed-attempt counter or auto-freeze exists. Implement in AccountService#verifyPin (AccountService.java:98) with a counter on Account."
+    },
+    {
+      "id": "REQ-ACC-08",
+      "status": "COVERED",
+      "implementation": [
+        {
+          "file": "bank-app/src/main/java/com/spectrace/bank/accounts/AccountService.java",
+          "symbol": "AccountService#getBalance",
+          "line": 77
+        }
+      ],
+      "tests": [
+        {
+          "class": "com.spectrace.bank.accounts.AccountServiceTest",
+          "method": "balanceEnquiryIsRoundedToTwoDecimals",
+          "new": false
+        }
+      ],
+      "notes": ""
+    }
+  ]
+}
