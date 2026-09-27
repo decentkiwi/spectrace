@@ -1,5 +1,7 @@
 # SpecTrace: from requirements PDF to verified test evidence, with IBM Bob
 
+**Website:** https://decentkiwi.github.io/spectrace/ · built from `site/index.html` by `.github/workflows/pages.yml`
+
 > **Workflow improved: testing and release readiness.** SpecTrace turns a business-requirements
 > document into a verified traceability matrix. For every requirement it finds the code, finds or writes the tests,
 > runs them, and reports what's covered, what's broken and what's missing. Parallel Bob subagents do
