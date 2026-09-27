@@ -6,6 +6,7 @@ Create a todo list with the 5 phases below and tick them off as you go.
 
 ## Phase 0: Start the clock
 
+If `spectrace-out/run.json` exists, copy it to `spectrace-out/run.prev.json` first (Phase 1 may need it back).
 Run `date -u +%Y-%m-%dT%H:%M:%SZ` and write `spectrace-out/run.json`:
 ```json
 { "started_at": "<timestamp>", "spec": "<path to the document>", "manual_minutes_per_requirement": 30 }
@@ -49,7 +50,15 @@ Tell the user how many requirements you found per module.
 **Incremental mode:** if `requirements.prev.json` exists, compare each requirement's `text` and
 `acceptance_criteria`. List the added, changed and removed IDs. Only modules containing added or
 changed IDs are re-traced in Phase 2; untouched modules keep their existing `trace-<module>.json`.
-If nothing changed, skip to Phase 3.
+A module is always traced if its `trace-<module>.json` or its `<Module>RequirementsTest` file is missing.
+
+**If nothing changed and every module already has its trace file, this is not a new run. Do not
+continue to Phases 2–5**, and do not rebuild the report (that would present old results with a new
+timing). Instead:
+1. Move `spectrace-out/run.prev.json` back to `spectrace-out/run.json` (or delete `run.json` if there was no previous one).
+2. Tell the user: "No requirements changed since the last run, so the existing matrix is still current:
+   `spectrace-out/matrix.html`. For a fresh full run (e.g. a demo), run `demo-kit/reset.sh` first, then `/trace` again."
+3. Stop.
 
 ## Phase 2: Trace modules in parallel (subagents)
 
@@ -89,7 +98,8 @@ which IDs were affected and trust the script, not the subagent.
 ## Phase 5: Brief the user
 
 Reply with:
-1. A one-line headline: `N requirements · X covered · Y newly tested · Z bugs · W not implemented · T tests added · M min`.
+1. The headline: copy the `Headline:` line printed by `build_report.py` **verbatim**. Do not compute or
+   re-type the numbers yourself.
 2. **Bugs found**: for each FAILING requirement, the spec value vs the actual value, and the suspect code as `file:line`.
 3. **Gaps**: each NOT_IMPLEMENTED requirement, with where it would be implemented.
 4. The paths `spectrace-out/matrix.html` and `spectrace-out/matrix.md`.

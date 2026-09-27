@@ -34,46 +34,17 @@ import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
-# ── YAML is optional: fall back to a thin parser for simple key: value files ──
-try:
-    import yaml as _yaml
-    def _load_yaml(path):
-        with open(path, encoding="utf-8") as f:
-            return _yaml.safe_load(f)
-except ImportError:
-    def _load_yaml(path):
-        """Minimal YAML loader: handles key: value, key: | block scalars, and list items."""
-        result = {}
-        with open(path, encoding="utf-8") as f:
-            lines = f.readlines()
-        i = 0
-        while i < len(lines):
-            line = lines[i]
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                i += 1
-                continue
-            if stripped.startswith("- "):
-                i += 1
-                continue   # skip list items at root level (modules parsed separately)
-            m = re.match(r'^(\w[\w_-]*):\s*(.*)', line)
-            if m:
-                key, val = m.group(1), m.group(2).strip()
-                if val in ("", "|", ">", ">-"):
-                    # block scalar — collect continuation lines
-                    block = []
-                    i += 1
-                    while i < len(lines) and (lines[i].startswith(" ") or lines[i].strip() == ""):
-                        block.append(lines[i].strip())
-                        i += 1
-                    result[key] = " ".join(b for b in block if b)
-                elif val and not val.startswith("#"):
-                    result[key] = val.strip('"\'')
-                else:
-                    i += 1
-                    continue
-            i += 1
-        return result
+# ── spectrace.yaml is parsed with PyYAML (pip install -r tools/requirements.txt) ──
+def _load_yaml(path):
+    try:
+        import yaml
+    except ImportError:
+        # A hand-rolled fallback silently misread inline comments and the modules list,
+        # so fail loudly instead of producing a report from a half-parsed config.
+        sys.exit(f"{path} needs PyYAML to parse: pip install -r tools/requirements.txt")
+    with open(path, encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
 
 STATUSES = {
     "COVERED": ("Covered", "Existing tests prove the requirement"),
@@ -386,8 +357,15 @@ def build(out, app, baseline_ref, build_dir, cfg=None):
     elif run.get("mode") == "replay":
         timing = "replay"
     elif started:
+        # The first report built after a run fixes its duration; later rebuilds (after /fix,
+        # or hours later) reuse it instead of growing the number.
+        if not run.get("finished_at"):
+            run["finished_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            with open(os.path.join(out, "run.json"), "w", encoding="utf-8") as f:
+                json.dump(run, f, indent=2)
         t0 = datetime.fromisoformat(started.replace("Z", "+00:00"))
-        elapsed_min = round((datetime.now(timezone.utc) - t0).total_seconds() / 60, 1)
+        t1 = datetime.fromisoformat(run["finished_at"].replace("Z", "+00:00"))
+        elapsed_min = round((t1 - t0).total_seconds() / 60, 1)
         timing = "live"
     manual_min_per_req = run.get("manual_minutes_per_requirement", 30)
     manual_total_min = manual_min_per_req * len(rows)
@@ -648,6 +626,11 @@ def main():
         json.dump(metrics, f, indent=2)
 
     c = metrics["status_counts"]
+    minutes = (f"{metrics['spectrace_minutes']} min" if metrics["spectrace_minutes"] is not None
+               else "timing not measured")
+    print(f"Headline: {metrics['requirements_total']} requirements · {c['COVERED']} covered · "
+          f"{c['NEW_TEST_PASS']} newly tested · {c['FAILING']} bugs · "
+          f"{c['NOT_IMPLEMENTED'] + c['UNTESTED']} not implemented · {metrics['tests_added']} tests added · {minutes}")
     print(f"{metrics['requirements_total']} requirements: {c['COVERED']} covered, {c['NEW_TEST_PASS']} newly tested, "
           f"{c['FAILING']} failing, {c['NOT_IMPLEMENTED']} not implemented, {c['UNTESTED']} untested, "
           f"{c['UNVERIFIED']} unverified; {metrics['tests_added']} tests added")

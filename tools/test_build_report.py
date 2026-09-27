@@ -221,6 +221,17 @@ class TimingAndGate(unittest.TestCase):
 
         self.assertEqual((metrics["timing"], metrics["spectrace_minutes"]), ("recorded", 12.5))
 
+    def test_live_timing_is_frozen_at_the_first_report(self):
+        self.f.run_info(started_at="2020-01-01T00:00:00Z")
+        _, first = self.f.build()
+        with open(os.path.join(self.f.out, "run.json")) as fh:
+            finished = json.load(fh)["finished_at"]
+
+        _, second = self.f.build()
+
+        self.assertEqual(first["spectrace_minutes"], second["spectrace_minutes"])
+        self.assertTrue(finished)
+
     def test_fail_on_sets_exit_code(self):
         self.assertEqual(self.f.cli().returncode, 0)
         gated = self.f.cli("--fail-on", "FAILING")
@@ -301,6 +312,18 @@ class ReferenceCheck(unittest.TestCase):
 
         self.assertEqual(result.returncode, 1)
         self.assertIn("REQ-A-01 (bad reference)", result.stdout)
+
+
+class ProjectConfig(unittest.TestCase):
+
+    def test_repo_config_parses_values_without_inline_comments(self):
+        # Regression: a hand-rolled fallback parser read `app_dir: bank-app   # comment` as the whole line.
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cfg = build_report.load_config(os.path.join(root, "spectrace.yaml"))
+
+        self.assertEqual(cfg["app_dir"], "bank-app")
+        self.assertEqual([m["name"] for m in cfg["modules"]], ["accounts", "transfers", "loans", "security"])
+        self.assertEqual(cfg["result_format"], "surefire")
 
 
 class TagScanner(unittest.TestCase):

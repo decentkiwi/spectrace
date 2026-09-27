@@ -16,7 +16,17 @@ for f in spectrace-out/requirements.json spectrace-out/metrics.json spectrace-ou
 done
 
 python3 - <<'EOF'
-import json, sys
+import glob, json, os, sys
+from datetime import datetime
+run = json.load(open("spectrace-out/run.json"))
+started = datetime.fromisoformat(run["started_at"].replace("Z", "+00:00")).timestamp()
+stale = [p for p in glob.glob("spectrace-out/trace-*.json")
+         + glob.glob("bank-app/src/test/java/**/*RequirementsTest.java", recursive=True)
+         if os.path.getmtime(p) < started]
+if stale:
+    sys.exit("these files predate the run, so Bob did not produce them in this run (was it a no-op "
+             "incremental run?):\n  " + "\n  ".join(sorted(stale))
+             + "\nRun demo-kit/reset.sh, then /trace again.")
 m = json.load(open("spectrace-out/metrics.json"))
 if m.get("timing") != "live" or m.get("spectrace_minutes") is None:
     sys.exit(f"spectrace-out/metrics.json has timing={m.get('timing')!r}; only a live Bob run can be recorded")

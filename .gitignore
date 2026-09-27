@@ -3,3 +3,6 @@ bank-app/target*/
 spectrace-out/*
 !spectrace-out/.gitkeep
 __pycache__/
+# Written by Bob during a /trace run (reference copies live in demo-kit/answer-key/tests).
+# Committing them makes the baseline red and turns a live run into a no-op.
+bank-app/src/test/java/**/*RequirementsTest.java
