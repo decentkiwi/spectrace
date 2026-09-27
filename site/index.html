@@ -1,0 +1,344 @@
+<title>SpecTrace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root {
+  --paper: #f4f6f8;
+  --sheet: #ffffff;
+  --ink: #14202b;
+  --ink-2: #4a5866;
+  --rule: #d6dde4;
+  --mark: #f6d65a;
+  --mark-ink: #14202b;
+  --covered: #1d7a4b;
+  --new: #2e5bcc;
+  --bug: #c03327;
+  --missing: #6a49b5;
+  --code-bg: #eaeef2;
+  --display: "Archivo", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #0f161d; --sheet: #16202a; --ink: #e8edf2; --ink-2: #a3b0bd; --rule: #2a3643;
+    --mark: #e2c24a; --mark-ink: #14202b;
+    --covered: #4cc38a; --new: #7ea2ff; --bug: #ff7b6e; --missing: #b69cff; --code-bg: #1e2a36;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0f161d; --sheet: #16202a; --ink: #e8edf2; --ink-2: #a3b0bd; --rule: #2a3643;
+  --mark: #e2c24a; --mark-ink: #14202b;
+  --covered: #4cc38a; --new: #7ea2ff; --bug: #ff7b6e; --missing: #b69cff; --code-bg: #1e2a36;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink);
+  font: 16px/1.6 var(--body);
+  padding-inline: 20px; padding-block: 0 64px;
+}
+main { max-width: 1080px; margin: 0 auto; display: grid; gap: 88px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; line-height: 1.08; }
+h1 { font-size: clamp(2.4rem, 6vw, 4.2rem); font-weight: 800; font-stretch: 80%; letter-spacing: -0.01em; }
+h2 { font-size: clamp(1.7rem, 3.4vw, 2.4rem); font-weight: 800; font-stretch: 85%; }
+h3 { font-size: 1.15rem; font-weight: 700; }
+p { margin: 0; max-width: 65ch; }
+a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible { outline: 3px solid var(--new); outline-offset: 2px; }
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+mark { background: linear-gradient(transparent 12%, var(--mark) 12%, var(--mark) 88%, transparent 88%); color: var(--mark-ink); padding-inline: 2px; }
+.eyebrow { font: 600 0.75rem/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-2); }
+.section { display: grid; gap: 28px; }
+.section > header { display: grid; gap: 12px; }
+.lede { color: var(--ink-2); font-size: 1.08rem; }
+
+/* top bar */
+.bar { max-width: 1080px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-block: 22px; flex-wrap: wrap; }
+.brand { font: 800 1.25rem/1 var(--display); font-stretch: 80%; display: flex; align-items: center; gap: 10px; }
+.brand svg { width: 26px; height: 26px; }
+.bar nav { display: flex; gap: 20px; flex-wrap: wrap; font-size: 0.92rem; }
+.bar nav a { text-decoration: none; color: var(--ink-2); }
+.bar nav a:hover { color: var(--ink); text-decoration: underline; }
+
+/* hero */
+.hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: 48px; align-items: center; padding-top: 24px; }
+.hero-copy { display: grid; gap: 22px; }
+.hero-copy p { font-size: 1.15rem; color: var(--ink-2); }
+.cta { display: flex; gap: 12px; flex-wrap: wrap; }
+.btn { display: inline-flex; align-items: center; gap: 8px; font: 600 0.95rem/1 var(--body); padding: 13px 18px; border-radius: 6px; text-decoration: none; border: 1.5px solid var(--ink); }
+.btn.primary { background: var(--ink); color: var(--paper); }
+.btn.ghost { color: var(--ink); }
+
+/* evidence card: a requirement traced to its verdict */
+.evidence { background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; box-shadow: 0 18px 40px -24px rgba(20, 32, 43, .45); overflow: hidden; }
+.ev-part { padding: 18px 20px; display: grid; gap: 8px; }
+.ev-part + .ev-part { border-top: 1px dashed var(--rule); }
+.ev-label { font: 600 0.68rem/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-2); }
+.ev-req { font-family: var(--mono); font-weight: 600; color: var(--new); }
+.ev-text { font-size: 0.95rem; }
+.ev-test { font-family: var(--mono); font-size: 0.8rem; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ev-test .fail { color: var(--bug); font-weight: 600; }
+.ev-verdict { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.stamp { display: inline-block; font: 700 0.72rem/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; padding: 6px 9px; border: 2px solid currentColor; border-radius: 4px; transform: rotate(-2deg); }
+.stamp.bug { color: var(--bug); }
+.stamp.covered { color: var(--covered); }
+.stamp.new { color: var(--new); }
+.stamp.missing { color: var(--missing); }
+.ev-where { font-family: var(--mono); font-size: 0.8rem; color: var(--ink-2); }
+
+/* problem */
+.facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.fact { border-top: 2px solid var(--ink); padding-top: 14px; display: grid; gap: 8px; align-content: start; }
+.fact strong { font: 800 2rem/1 var(--display); font-stretch: 80%; }
+.fact p { color: var(--ink-2); font-size: 0.97rem; }
+
+/* pipeline */
+.pipeline { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; counter-reset: phase -1; }
+.pipeline li { counter-increment: phase; padding: 18px 18px 18px 0; border-top: 2px solid var(--ink); display: grid; gap: 8px; align-content: start; position: relative; }
+.pipeline li + li { padding-left: 18px; border-left: 1px solid var(--rule); }
+.pipeline li::before { content: "Phase " counter(phase); font: 600 0.7rem/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); }
+.pipeline p { font-size: 0.93rem; color: var(--ink-2); }
+.agents { display: flex; gap: 6px; flex-wrap: wrap; }
+.agents span { font: 600 0.7rem/1 var(--mono); padding: 5px 7px; border: 1px solid var(--rule); border-radius: 4px; background: var(--sheet); }
+
+/* results */
+.results { display: grid; gap: 22px; }
+.tally { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+.tally div { background: var(--sheet); padding: 16px 18px; display: grid; gap: 6px; }
+.tally b { font: 800 2.2rem/1 var(--display); font-variant-numeric: tabular-nums; }
+.tally span { font-size: 0.85rem; color: var(--ink-2); }
+.tally .covered b { color: var(--covered); } .tally .new b { color: var(--new); }
+.tally .bug b { color: var(--bug); } .tally .missing b { color: var(--missing); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
+table { width: 100%; border-collapse: collapse; min-width: 720px; font-size: 0.93rem; }
+th, td { text-align: left; vertical-align: top; padding: 14px 16px; border-bottom: 1px solid var(--rule); }
+tr:last-child td { border-bottom: 0; }
+th { font: 600 0.7rem/1.2 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); }
+td .mono { white-space: nowrap; }
+.note { font-size: 0.88rem; color: var(--ink-2); }
+.unplanted { display: inline-block; margin-top: 6px; font: 600 0.68rem/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; background: var(--mark); color: var(--mark-ink); padding: 4px 6px; border-radius: 3px; }
+
+/* trust */
+.checks { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px 40px; }
+.check { display: grid; grid-template-columns: 22px 1fr; gap: 12px; }
+.check svg { width: 22px; height: 22px; color: var(--covered); margin-top: 2px; }
+.check p { color: var(--ink-2); font-size: 0.97rem; }
+
+/* features + impact */
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+dl.features { margin: 0; display: grid; gap: 0; }
+dl.features div { display: grid; grid-template-columns: 11rem 1fr; gap: 16px; padding-block: 12px; border-bottom: 1px solid var(--rule); }
+dl.features dt { font-weight: 600; }
+dl.features dd { margin: 0; color: var(--ink-2); font-size: 0.95rem; }
+
+/* run */
+.run { background: var(--ink); color: var(--paper); border-radius: 8px; padding: 28px; display: grid; gap: 18px; }
+.run h2 { color: var(--paper); }
+.run p { color: color-mix(in srgb, var(--paper) 78%, transparent); }
+pre { margin: 0; overflow-x: auto; font: 0.86rem/1.7 var(--mono); background: color-mix(in srgb, var(--paper) 8%, transparent); padding: 16px 18px; border-radius: 6px; }
+pre .c { opacity: 0.6; }
+footer { max-width: 1080px; margin: 0 auto; padding-top: 40px; border-top: 1px solid var(--rule); color: var(--ink-2); font-size: 0.88rem; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+@media (max-width: 900px) {
+  .hero, .two { grid-template-columns: 1fr; }
+  .pipeline { grid-template-columns: 1fr; }
+  .pipeline li + li { padding-left: 0; border-left: 0; }
+  .pipeline li { padding-right: 0; }
+  .tally { grid-template-columns: repeat(2, 1fr); }
+  .tally div:first-child { grid-column: span 2; }
+  .facts, .checks { grid-template-columns: 1fr; }
+  dl.features div { grid-template-columns: 1fr; gap: 4px; }
+  main { gap: 64px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .stamp { animation: press .5s .4s both cubic-bezier(.2, 1.4, .4, 1); }
+  @keyframes press { from { transform: rotate(-2deg) scale(1.35); opacity: .35; } to { transform: rotate(-2deg) scale(1); opacity: 1; } }
+}
+</style>
+
+<div class="bar">
+  <div class="brand">
+    <svg viewBox="0 0 26 26" aria-hidden="true"><rect x="1" y="1" width="24" height="24" rx="5" fill="var(--ink)"/><path d="M7 9h8M7 13h12M7 17h6" stroke="var(--paper)" stroke-width="2" stroke-linecap="round"/><circle cx="19" cy="17" r="2.6" fill="var(--mark)"/></svg>
+    SpecTrace
+  </div>
+  <nav aria-label="Sections">
+    <a href="#how">How it works</a>
+    <a href="#results">Results</a>
+    <a href="#trust">Why trust it</a>
+    <a href="#run">Run it</a>
+  </nav>
+</div>
+
+<main>
+  <section class="hero">
+    <div class="hero-copy">
+      <span class="eyebrow">Built with IBM Bob 2.0 · Testing &amp; release readiness</span>
+      <h1>Green tests don't mean the spec is covered.</h1>
+      <p>SpecTrace reads your requirements document, traces every numbered requirement to the code and tests behind it, writes the tests that are missing, and tells you <mark>what's covered, what's broken and what was never built</mark>, with evidence an auditor can check.</p>
+      <div class="cta">
+        <a class="btn primary" href="matrix.html">Open the results dashboard</a>
+        <a class="btn ghost" href="#how">See how it works</a>
+      </div>
+    </div>
+
+    <figure class="evidence" aria-label="Example: one requirement traced to a verdict" style="margin:0">
+      <div class="ev-part">
+        <span class="ev-label">From the spec · NBK-BRD-2026-014</span>
+        <span class="ev-req">REQ-SEC-05 · Account ownership</span>
+        <span class="ev-text">A customer attempting a transfer from another customer's account is refused with HTTP 403, and no money moves.</span>
+      </div>
+      <div class="ev-part">
+        <span class="ev-label">Test Bob wrote</span>
+        <div class="ev-test"><span>customerCannotTransferFromAnotherCustomersAccount</span><span class="fail">FAIL</span></div>
+        <div class="ev-test"><span>expected 403, but was 200</span></div>
+      </div>
+      <div class="ev-part">
+        <span class="ev-label">Verdict</span>
+        <div class="ev-verdict"><span class="stamp bug">Bug found</span><span class="ev-where">TransferController.java:35</span></div>
+        <span class="note">Alice's login could move money out of Bob's account. Nobody planted this bug.</span>
+      </div>
+    </figure>
+  </section>
+
+  <section class="section" aria-labelledby="problem-h">
+    <header>
+      <span class="eyebrow">The problem</span>
+      <h2 id="problem-h">Traceability is still done by hand, in a spreadsheet.</h2>
+      <p class="lede">Banks, insurers and healthcare teams must prove every requirement is implemented and tested before each release. Today someone reads the spec, searches the code for each requirement, checks for tests, writes the missing ones and updates a spreadsheet, then does it all again when the spec changes.</p>
+    </header>
+    <div class="facts">
+      <div class="fact"><strong>~30 min</strong><p>per requirement to locate the code, find the tests, write what's missing and update the matrix. About 13.5 hours for a 27-requirement spec (our estimate).</p></div>
+      <div class="fact"><strong>Green ≠ covered</strong><p>A passing suite only proves the existing tests pass. It says nothing about the requirements nobody tested.</p></div>
+      <div class="fact"><strong>Drift</strong><p>When the spec changes and the code doesn't, nothing fails. The mismatch ships.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="how" aria-labelledby="how-h">
+    <header>
+      <span class="eyebrow">How it works</span>
+      <h2 id="how-h">One command in Bob: <code>/trace docs/requirements.pdf</code></h2>
+    </header>
+    <ol class="pipeline">
+      <li><h3>Start the clock</h3><p>Records the start time and pins a git baseline, so the tests Bob writes can never be mistaken for existing ones.</p></li>
+      <li><h3>Read the spec</h3><p>Document understanding pulls every requirement and acceptance criterion from the PDF, tables included, word for word.</p></li>
+      <li><h3>Trace in parallel</h3><p>One subagent per module finds the code, checks existing tests, writes missing JUnit tests, runs them and diagnoses failures.</p><div class="agents"><span>accounts</span><span>transfers</span><span>loans</span><span>security</span></div></li>
+      <li><h3>Verify</h3><p>A clean full test run, then a script rebuilds every status from the real results, not from what the agents said.</p></li>
+      <li><h3>Report</h3><p>A traceability matrix, a Markdown copy for PRs and a brief: bugs with <code>file:line</code>, gaps, tests added.</p></li>
+    </ol>
+    <p class="note">Then <code>/fix</code> patches the bugs and re-checks until the rows turn green, and <code>/release-notes</code> writes a release-readiness report. When the spec changes, <code>/trace</code> re-checks only the modules whose requirements changed.</p>
+  </section>
+
+  <section class="section results" id="results" aria-labelledby="results-h">
+    <header>
+      <span class="eyebrow">Results on the sample bank app</span>
+      <h2 id="results-h">27 requirements in, three real bugs out.</h2>
+      <p class="lede">The demo target is a Spring Boot banking API with accounts, transfers, loans and a JWT security layer. Figures below are from the reference run.</p>
+    </header>
+    <div class="tally">
+      <div><b>27</b><span>requirements traced</span></div>
+      <div class="covered"><b>12</b><span>already covered</span></div>
+      <div class="new"><b>10</b><span>newly tested, passing</span></div>
+      <div class="bug"><b>3</b><span>bugs found</span></div>
+      <div class="missing"><b>2</b><span>never implemented</span></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Requirement</th><th>The spec says</th><th>The code does</th><th>Where</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="mono"><b>REQ-SEC-05</b></span><br>Account ownership<br><span class="unplanted">Not planted</span></td>
+            <td>Another customer's account is refused with HTTP 403</td>
+            <td>HTTP 200. Any logged-in customer can read, or send money from, anyone's account</td>
+            <td class="mono">TransferController.java:35<br>AccountController.java:44</td>
+          </tr>
+          <tr>
+            <td><span class="mono"><b>REQ-TRF-03</b></span><br>Daily transfer limit</td>
+            <td>SGD 5,000.00 limit is inclusive</td>
+            <td>A day total of exactly 5,000.00 is rejected (<code>&gt;=</code> instead of <code>&gt;</code>)</td>
+            <td class="mono">TransferService.java:50</td>
+          </tr>
+          <tr>
+            <td><span class="mono"><b>REQ-LN-03</b></span><br>Monthly instalment</td>
+            <td>Rounded half-up: SGD 754.90</td>
+            <td>Truncated: SGD 754.89</td>
+            <td class="mono">LoanService.java:60</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Two of the bugs were planted for the demo. The ownership bug came in with our own login code, and SpecTrace caught it by testing the rule through the real HTTP and Spring Security stack. It is Broken Object Level Authorization, number one on the OWASP API Security Top 10. <a href="matrix.html">See every requirement in the full dashboard.</a></p>
+  </section>
+
+  <section class="section" id="trust" aria-labelledby="trust-h">
+    <header>
+      <span class="eyebrow">Why trust it</span>
+      <h2 id="trust-h">The AI doesn't grade its own homework.</h2>
+      <p class="lede">Agents can claim "all covered". SpecTrace doesn't take their word for anything that ends up in the report.</p>
+    </header>
+    <div class="checks">
+      <div class="check"><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M4 11.5l4.5 4.5L18 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><div><h3>Statuses come from real test results</h3><p>Every verdict is rebuilt from the Surefire XML the test run produced, and from the <code>@Tag("REQ-…")</code> annotations in the test source.</p></div></div>
+      <div class="check"><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M4 11.5l4.5 4.5L18 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><div><h3>Disagreements are flagged</h3><p>If a subagent says "covered" but its test fails, the report says so. The same goes for tests that are untagged or never ran.</p></div></div>
+      <div class="check"><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M4 11.5l4.5 4.5L18 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><div><h3>Line numbers are checked</h3><p>Every <code>file:line</code> an agent cites must exist and sit inside the method it names. Stale or invented locations are flagged.</p></div></div>
+      <div class="check"><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M4 11.5l4.5 4.5L18 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><div><h3>Production code is off limits</h3><p>Tracing modes can only write tests and reports. Only the separate Fixer mode may touch production code, and it may never weaken a test.</p></div></div>
+    </div>
+  </section>
+
+  <section class="two" aria-label="Bob features and impact">
+    <div class="section">
+      <header>
+        <span class="eyebrow">IBM Bob features used</span>
+        <h2>Every step runs on Bob.</h2>
+      </header>
+      <dl class="features">
+        <div><dt>Document understanding</dt><dd>Extracts requirements and acceptance criteria from the PDF spec</dd></div>
+        <div><dt>Custom modes</dt><dd>Orchestrator, per-module Tracer and Fixer, each limited to the files it may edit</dd></div>
+        <div><dt>Parallel subagents</dt><dd>Four modules traced at once, each in its own build folder</dd></div>
+        <div><dt>Agent mode</dt><dd>Writes, compiles and runs tests, and fixes its own test mistakes</dd></div>
+        <div><dt>Rules</dt><dd>The team's traceability conventions, applied in every mode</dd></div>
+        <div><dt>Slash commands</dt><dd><code>/trace</code>, <code>/fix</code>, <code>/release-notes</code></dd></div>
+      </dl>
+    </div>
+    <div class="section">
+      <header>
+        <span class="eyebrow">Impact</span>
+        <h2>Hours of checking, done in one run.</h2>
+      </header>
+      <div class="table-wrap">
+        <table style="min-width:0">
+          <thead><tr><th></th><th>By hand</th><th>SpecTrace</th></tr></thead>
+          <tbody>
+            <tr><td>Trace 27 requirements</td><td>~13.5 h (estimate)</td><td>One command; time measured per run</td></tr>
+            <tr><td>Missing tests</td><td>Often skipped</td><td>32 tagged tests written</td></tr>
+            <tr><td>Bugs before release</td><td>Found in UAT, or by attackers</td><td>3 found, with <code>file:line</code></td></tr>
+            <tr><td>Spec change</td><td>Redo the spreadsheet</td><td>Re-check changed modules only</td></tr>
+            <tr><td>Audit evidence</td><td>A spreadsheet you trust</td><td>Built from real test results</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="run" id="run" aria-labelledby="run-h">
+    <h2 id="run-h">Run it</h2>
+    <p>You need JDK 21+, Python 3 and IBM Bob with the <code style="background:transparent;padding:0">spectrace</code> folder open as the workspace.</p>
+<pre><span class="c"># baseline: the app's own tests, all green</span>
+cd bank-app &amp;&amp; ./mvnw test
+
+<span class="c"># in Bob</span>
+/trace docs/requirements.pdf       <span class="c"># trace all 27 requirements</span>
+/fix                               <span class="c"># patch the bugs, re-check, rows turn green</span>
+/release-notes v1.0.0              <span class="c"># release-readiness report</span>
+/trace docs/requirements-v2.pdf    <span class="c"># spec change: only Loans is re-checked</span></pre>
+    <p>Results land in <code style="background:transparent;padding:0">spectrace-out/matrix.html</code>.</p>
+  </section>
+</main>
+
+<footer>
+  <span>SpecTrace · IBM Bob 2.0 Hackathon</span>
+  <span>Sample data: Northbridge Bank is fictional.</span>
+</footer>
